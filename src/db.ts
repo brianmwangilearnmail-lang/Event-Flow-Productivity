@@ -8,7 +8,8 @@ import {
   Payment, 
   Receipt, 
   ActivityLog, 
-  BusinessSettings 
+  BusinessSettings,
+  User
 } from './types';
 
 export class BhaksDatabase extends Dexie {
@@ -21,10 +22,11 @@ export class BhaksDatabase extends Dexie {
   receipts!: Table<Receipt>;
   activityLogs!: Table<ActivityLog>;
   settings!: Table<BusinessSettings>;
+  users!: Table<User>;
 
   constructor() {
     super('BhaksDatabase');
-    this.version(1).stores({
+    this.version(2).stores({
       clients: '++id, fullName, email, phone, status, createdAt',
       events: '++id, clientId, title, type, date, status',
       catalog: '++id, name, sku, category, isArchived',
@@ -33,7 +35,8 @@ export class BhaksDatabase extends Dexie {
       payments: '++id, clientId, date',
       receipts: '++id, number, paymentId, clientId',
       activityLogs: '++id, clientId, timestamp, actionType',
-      settings: '++id'
+      settings: '++id',
+      users: '++id, &email, fullName'
     });
   }
 }

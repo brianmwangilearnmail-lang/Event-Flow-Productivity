@@ -41,13 +41,34 @@ import EventView from './components/EventView';
 import DocumentsView from './components/DocumentsView';
 import ActivityLogView from './components/ActivityLogView';
 import { Files } from 'lucide-react';
+import { Routes, Route, Navigate } from 'react-router-dom';
+import { useAuth } from './context/AuthContext';
+import ProtectedRoute from './components/ProtectedRoute';
+import LoginPage from './components/LoginPage';
 
 type AppView = 'dashboard' | 'clients' | 'events' | 'quotations' | 'invoices' | 'receipts' | 'catalog' | 'history' | 'settings' | 'documents';
 
 export default function App() {
+  return (
+    <Routes>
+      <Route path="/login" element={<LoginPage />} />
+      <Route 
+        path="/*" 
+        element={
+          <ProtectedRoute>
+            <DashboardContent />
+          </ProtectedRoute>
+        } 
+      />
+    </Routes>
+  );
+}
+
+function DashboardContent() {
   const [activeView, setActiveView] = useState<AppView>('dashboard');
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const { user, logout } = useAuth();
 
   // Ensure default settings exist
   const settings = useLiveQuery(() => db.settings.toArray()) || [];
@@ -159,9 +180,12 @@ export default function App() {
         </nav>
 
         <div className="p-8 border-t border-white/5">
-           <button className="flex items-center gap-4 text-white/20 hover:text-white transition-all group outline-none">
+           <button 
+            onClick={logout}
+            className="flex items-center gap-4 text-white/20 hover:text-white transition-all group outline-none"
+          >
             <LogOut size={20} className="group-hover:-translate-x-1 transition-transform" />
-            <span className={cn("text-[10px] font-black uppercase tracking-[0.2em] truncate", !isSidebarOpen && "hidden")}>Terminate</span>
+            <span className={cn("text-[10px] font-black uppercase tracking-[0.2em] truncate", !isSidebarOpen && "hidden")}>Terminate Session</span>
           </button>
         </div>
       </aside>
@@ -199,10 +223,10 @@ export default function App() {
             </button>
             <div className="flex items-center gap-3 pl-6 border-l border-gray-100">
                <div className="text-right">
-                <p className="text-[10px] font-black uppercase tracking-widest text-black">{settings[0]?.adminName || 'Admin'}</p>
+                <p className="text-[10px] font-black uppercase tracking-widest text-black">{user?.fullName || settings[0]?.adminName || 'Admin'}</p>
               </div>
               <div className="w-8 h-8 rounded-full bg-black flex items-center justify-center text-white font-serif italic text-xs">
-                {settings[0]?.adminName ? settings[0].adminName[0].toUpperCase() : 'B'}
+                {(user?.fullName || settings[0]?.adminName || 'A')[0].toUpperCase()}
               </div>
             </div>
           </div>

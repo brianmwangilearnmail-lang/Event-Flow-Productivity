@@ -221,3 +221,12 @@ export interface BusinessSettings {
   taxRate: number;
   adminName: string;
 }
+
+export interface User {
+  id?: number;
+  email: string;
+  password?: string; // Hashed password
+  fullName: string;
+  createdAt: number;
+  lastLogin?: number;
+}

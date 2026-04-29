@@ -1,0 +1,13 @@
+{
+  "name": "EventFlow",
+  "description": "Streamlined event management dashboard for handling clients, quotations, invoices, and service catalogs efficiently.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ],
+  "majorCapabilities": [
+    "CRM",
+    "Financial Management",
+    "PDF Generation"
+  ]
+}

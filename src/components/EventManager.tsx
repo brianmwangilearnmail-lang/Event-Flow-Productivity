@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { ArrowLeft, CheckCircle, Circle, Plus, FileText, Check, Save, Loader2 } from 'lucide-react';
-import { useLiveQuery } from 'dexie-react-hooks';
-import { db, logActivity } from '../db';
+import { useSupabaseQuery } from '../hooks/useSupabaseQuery';
+import { supabase } from '../lib/supabase';
+import { logActivity } from '../db';
 import { Event, Quotation, Invoice, QuotationLineItem, DocumentStatus } from '../types';
 import { cn, formatCurrency } from '../lib/utils';
 import Modal from './Modal';
@@ -12,8 +13,9 @@ interface EventManagerProps {
 }
 
 export default function EventManager({ eventId, onBack }: EventManagerProps) {
-  const event = useLiveQuery(() => db.events.get(eventId), [eventId]);
-  const quotations = useLiveQuery(() => db.quotations.where('eventId').equals(eventId).toArray(), [eventId]) || [];
+  const { data: eventData = [] } = useSupabaseQuery<Event>('events', (q) => q.select('*').eq('id', eventId), [eventId]);
+  const event = eventData[0];
+  const { data: quotations = [] } = useSupabaseQuery<Quotation>('quotations', (q) => q.select('*').eq('eventId', eventId), [eventId]);
   
   // Find the latest approved or sent quote
   const activeQuote = quotations.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0];
@@ -38,7 +40,7 @@ export default function EventManager({ eventId, onBack }: EventManagerProps) {
   const handleToggleVerify = async (index: number) => {
     const newVerifiedItems = { ...verifiedItems, [index]: !verifiedItems[index] };
     setVerifiedItems(newVerifiedItems);
-    await db.events.update(eventId, { verifiedItems: newVerifiedItems });
+    await supabase.from('events').update({ verifiedItems: newVerifiedItems }).eq('id', eventId);
   };
 
   const handleAddCustomItem = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -56,13 +58,13 @@ export default function EventManager({ eventId, onBack }: EventManagerProps) {
 
     const newAdditionalItems = [...additionalItems, newItem];
     setAdditionalItems(newAdditionalItems);
-    await db.events.update(eventId, { additionalItems: newAdditionalItems });
+    await supabase.from('events').update({ additionalItems: newAdditionalItems }).eq('id', eventId);
     setIsAddItemModalOpen(false);
   };
 
   const handleUpdateVerificationStatus = async (status: 'Verified' | 'Unverified') => {
     setClientVerification(status);
-    await db.events.update(eventId, { clientVerification: status });
+    await supabase.from('events').update({ clientVerification: status }).eq('id', eventId);
   };
 
   const handleGenerateInvoice = async () => {
@@ -99,11 +101,13 @@ export default function EventManager({ eventId, onBack }: EventManagerProps) {
       notes: "Auto-generated from Event Manager containing additional items."
     };
 
-    await db.invoices.add(newInvoice);
-    await logActivity(event.clientId, 'Invoice Generated', `Created final invoice from Event Manager for additional items`, event.id, 'Event');
-    
-    setIsGeneratingInvoice(false);
-    alert("Invoice generated safely! Please check your Invoices tab or Client Profile.");
+    const { error } = await supabase.from('invoices').insert(newInvoice);
+    if (error) {
+      alert('Error generating invoice: ' + error.message);
+    } else {
+      await logActivity(event.clientId, 'Invoice Generated', `Created final invoice from Event Manager for additional items`, event.id, 'Event');
+      alert("Invoice generated safely! Please check your Invoices tab or Client Profile.");
+    }
   };
 
   return (
@@ -217,7 +221,7 @@ export default function EventManager({ eventId, onBack }: EventManagerProps) {
                     onClick={async () => {
                       const newItems = additionalItems.filter((_, i) => i !== index);
                       setAdditionalItems(newItems);
-                      await db.events.update(eventId, { additionalItems: newItems });
+                      await supabase.from('events').update({ additionalItems: newItems }).eq('id', eventId);
                     }}
                   >
                     Remove

@@ -16,11 +16,12 @@ import {
   Image as ImageIcon,
   X
 } from 'lucide-react';
-import { useLiveQuery } from 'dexie-react-hooks';
-import { db, logActivity } from '../db';
+import { useSupabaseQuery } from '../hooks/useSupabaseQuery';
+import { supabase } from '../lib/supabase';
+import { logActivity } from '../db';
 import { CatalogItem } from '../types';
 import Modal from './Modal';
-import { cn, formatCurrency } from '../lib/utils';
+import { cn, formatCurrency, compressImage } from '../lib/utils';
 
 export default function CatalogView() {
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -48,17 +49,20 @@ export default function CatalogView() {
     'Custom services'
   ];
 
-  const items = useLiveQuery(() => {
-    let query = db.catalog.toCollection();
+  const { data: allItems = [] } = useSupabaseQuery<CatalogItem>('catalog', (q) => {
+    let query = q.select('*').eq('isArchived', false).order('name');
     if (selectedCategory !== 'All') {
-      return db.catalog.where('category').equals(selectedCategory).filter(i => 
-        !i.isArchived && (i.name.toLowerCase().includes(searchTerm.toLowerCase()) || i.sku.toLowerCase().includes(searchTerm.toLowerCase()))
-      ).toArray();
+      query = query.eq('category', selectedCategory);
     }
-    return db.catalog.filter(i => 
-      !i.isArchived && (i.name.toLowerCase().includes(searchTerm.toLowerCase()) || i.sku.toLowerCase().includes(searchTerm.toLowerCase()))
-    ).toArray();
-  }, [selectedCategory, searchTerm]) || [];
+    return query;
+  }, [selectedCategory]);
+
+  const items = React.useMemo(() => {
+    return allItems.filter(i => 
+      i.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
+      (i.sku && i.sku.toLowerCase().includes(searchTerm.toLowerCase()))
+    );
+  }, [allItems, searchTerm]);
 
   const handleAddItem = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -66,7 +70,7 @@ export default function CatalogView() {
     const supplierPrice = parseFloat(formData.get('supplierPrice') as string) || 0;
     const clientPrice = parseFloat(formData.get('clientPrice') as string) || 0;
 
-    const newItem: Omit<CatalogItem, 'id'> = {
+    const itemData: Omit<CatalogItem, 'id'> = {
       name: formData.get('name') as string,
       sku: formData.get('sku') as string,
       category: formData.get('category') as string,
@@ -79,12 +83,20 @@ export default function CatalogView() {
       imageUrl: imagePreview || undefined,
     };
 
-    if (editingItem) {
-      await db.catalog.update(editingItem.id!, newItem);
-      logActivity(undefined, 'Catalog Updated', `Updated item: ${newItem.name}`);
+    if (editingItem?.id) {
+      const { error } = await supabase.from('catalog').update(itemData).eq('id', editingItem.id);
+      if (error) {
+        alert('Error updating item: ' + error.message);
+        return;
+      }
+      await logActivity(undefined, 'Catalog Updated', `Updated item: ${itemData.name}`);
     } else {
-      await db.catalog.add(newItem);
-      logActivity(undefined, 'Catalog Updated', `Added item: ${newItem.name}`);
+      const { error } = await supabase.from('catalog').insert(itemData);
+      if (error) {
+        alert('Error adding item: ' + error.message);
+        return;
+      }
+      await logActivity(undefined, 'Catalog Updated', `Added item: ${itemData.name}`);
     }
 
     setIsAddModalOpen(false);
@@ -92,12 +104,13 @@ export default function CatalogView() {
     setImagePreview(null);
   };
 
-  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
       const reader = new FileReader();
-      reader.onloadend = () => {
-        setImagePreview(reader.result as string);
+      reader.onloadend = async () => {
+        const compressed = await compressImage(reader.result as string);
+        setImagePreview(compressed);
       };
       reader.readAsDataURL(file);
     }
@@ -111,8 +124,12 @@ export default function CatalogView() {
 
   const handleDeleteItem = async (id: number, name: string) => {
     if (window.confirm(`Are you sure you want to archive ${name}?`)) {
-      await db.catalog.update(id, { isArchived: true });
-      logActivity(undefined, 'Catalog Updated', `Archived item: ${name}`);
+      const { error } = await supabase.from('catalog').update({ isArchived: true }).eq('id', id);
+      if (error) {
+        alert('Error archiving item: ' + error.message);
+        return;
+      }
+      await logActivity(undefined, 'Catalog Updated', `Archived item: ${name}`);
     }
   };
 

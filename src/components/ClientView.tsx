@@ -15,8 +15,9 @@ import {
   Briefcase,
   Users
 } from 'lucide-react';
-import { useLiveQuery } from 'dexie-react-hooks';
-import { db, logActivity } from '../db';
+import { useSupabaseQuery } from '../hooks/useSupabaseQuery';
+import { supabase } from '../lib/supabase';
+import { logActivity } from '../db';
 import { Client, ClientStatus } from '../types';
 import Modal from './Modal';
 import { cn } from '../lib/utils';
@@ -32,17 +33,13 @@ export default function ClientView({ onNavigate }: ClientViewProps) {
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
 
-  const clients = useLiveQuery(() => {
-    let collection = db.clients.toCollection();
+  const { data: clients = [] } = useSupabaseQuery<Client>('clients', (q) => {
+    let query = q.select('*').order('createdAt', { ascending: false });
     if (searchTerm) {
-      return db.clients.filter(c => 
-        c.fullName.toLowerCase().includes(searchTerm.toLowerCase()) || 
-        c.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        c.companyName?.toLowerCase().includes(searchTerm.toLowerCase())
-      ).reverse().toArray();
+      query = query.or(`fullName.ilike.%${searchTerm}%,email.ilike.%${searchTerm}%,companyName.ilike.%${searchTerm}%`);
     }
-    return collection.reverse().toArray();
-  }, [searchTerm]) || [];
+    return query;
+  }, [searchTerm]);
 
   const handleAddClient = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -62,16 +59,27 @@ export default function ClientView({ onNavigate }: ClientViewProps) {
       assignedStaff: 'Admin User'
     };
 
-    const id = await db.clients.add(newClient as Client);
-    await logActivity(id, 'Client Created', `New client added: ${newClient.fullName}`, id, 'Client');
+    const { data, error } = await supabase.from('clients').insert(newClient).select().single();
+    if (error) {
+      alert('Error creating client: ' + error.message);
+      return;
+    }
+    
+    if (data) {
+      await logActivity(data.id, 'Client Created', `New client added: ${newClient.fullName}`, data.id, 'Client');
+    }
     setIsAddModalOpen(false);
   };
 
   const deleteClient = async (id: number) => {
     if (confirm('Are you sure you want to delete this client? All events and documents will remain but unlinked.')) {
-      const clientToDelete = await db.clients.get(id);
+      const { data: clientToDelete } = await supabase.from('clients').select('*').eq('id', id).single();
       if (clientToDelete) {
-        await db.clients.delete(id);
+        const { error } = await supabase.from('clients').delete().eq('id', id);
+        if (error) {
+          alert('Error deleting client: ' + error.message);
+          return;
+        }
         await logActivity(id, 'Record Deleted', `Client ${clientToDelete.fullName} was deleted`, id, 'Client', clientToDelete);
       }
     }

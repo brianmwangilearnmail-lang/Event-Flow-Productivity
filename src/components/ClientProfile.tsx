@@ -22,8 +22,9 @@ import {
   Eye,
   Trash2
 } from 'lucide-react';
-import { useLiveQuery } from 'dexie-react-hooks';
-import { db, logActivity } from '../db';
+import { useSupabaseQuery } from '../hooks/useSupabaseQuery';
+import { supabase } from '../lib/supabase';
+import { logActivity } from '../db';
 import { Client, ClientStatus, DocumentStatus } from '../types';
 import { cn, formatCurrency } from '../lib/utils';
 import Modal from './Modal';
@@ -51,57 +52,57 @@ export default function ClientProfile({ client, onBack, onNavigate }: ClientProf
   const [selectedDocument, setSelectedDocument] = useState<any | null>(null);
   const [selectedDocumentType, setSelectedDocumentType] = useState<'Quotation' | 'Invoice' | 'Receipt' | null>(null);
 
-  const events = useLiveQuery(() => 
-    db.events.where('clientId').equals(client.id!).toArray()
-  , [client.id]) || [];
+  const { data: events = [] } = useSupabaseQuery<Event>('events', (q) => 
+    q.select('*').eq('clientId', client.id!)
+  , [client.id]);
 
-  const quotations = useLiveQuery(() => 
-    db.quotations.where('clientId').equals(client.id!).toArray()
-  , [client.id]) || [];
+  const { data: quotations = [] } = useSupabaseQuery<Quotation>('quotations', (q) => 
+    q.select('*').eq('clientId', client.id!)
+  , [client.id]);
 
-  const invoices = useLiveQuery(() => 
-    db.invoices.where('clientId').equals(client.id!).toArray()
-  , [client.id]) || [];
+  const { data: invoices = [] } = useSupabaseQuery<Invoice>('invoices', (q) => 
+    q.select('*').eq('clientId', client.id!)
+  , [client.id]);
 
-  const receipts = useLiveQuery(() => 
-    db.receipts.where('clientId').equals(client.id!).toArray()
-  , [client.id]) || [];
+  const { data: receipts = [] } = useSupabaseQuery<ReceiptRecord>('receipts', (q) => 
+    q.select('*').eq('clientId', client.id!)
+  , [client.id]);
 
-  const logs = useLiveQuery(() => 
-    db.activityLogs.where('clientId').equals(client.id!).reverse().toArray()
-  , [client.id]) || [];
+  const { data: logs = [] } = useSupabaseQuery<any>('activity_logs', (q) => 
+    q.select('*').eq('clientId', client.id!).order('timestamp', { ascending: false })
+  , [client.id]);
 
-  const totalPaid = invoices.reduce((sum, inv) => sum + inv.amountPaid, 0);
-  const totalInvoiced = invoices.reduce((sum, inv) => sum + inv.grandTotal, 0);
+  const totalPaid = invoices?.reduce((sum, inv) => sum + (inv.amountPaid || 0), 0) || 0;
+  const totalInvoiced = invoices?.reduce((sum, inv) => sum + (inv.grandTotal || 0), 0) || 0;
   const balance = totalInvoiced - totalPaid;
 
   const handleDeleteReceipt = async (receiptId: number) => {
     if (!window.confirm('Are you sure you want to delete this receipt? This will revert the payment on the associated invoice.')) return;
     
     try {
-      const receipt = await db.receipts.get(receiptId);
+      const { data: receipt } = await supabase.from('receipts').select('*').eq('id', receiptId).single();
       if (!receipt) return;
       
       // Update the invoice
       if (receipt.paymentId) {
-        const payment = await db.payments.get(receipt.paymentId);
+        const { data: payment } = await supabase.from('payments').select('*').eq('id', receipt.paymentId).single();
         if (payment && payment.invoiceIds && payment.invoiceIds.length > 0) {
           const invoiceId = payment.invoiceIds[0];
-          const invoice = await db.invoices.get(invoiceId);
+          const { data: invoice } = await supabase.from('invoices').select('*').eq('id', invoiceId).single();
           if (invoice) {
-            const newAmountPaid = Math.max(0, invoice.amountPaid - receipt.amount);
+            const newAmountPaid = Math.max(0, (invoice.amountPaid || 0) - receipt.amount);
             const newStatus = newAmountPaid === 0 ? DocumentStatus.PENDING_PAYMENT : DocumentStatus.PARTIALLY_PAID;
-            await db.invoices.update(invoiceId, {
+            await supabase.from('invoices').update({
               amountPaid: newAmountPaid,
               status: newStatus
-            });
+            }).eq('id', invoiceId);
           }
-          await db.payments.delete(receipt.paymentId);
+          await supabase.from('payments').delete().eq('id', receipt.paymentId);
         }
       }
       
       // Delete the receipt
-      await db.receipts.delete(receiptId);
+      await supabase.from('receipts').delete().eq('id', receiptId);
       await logActivity(client.id, 'Receipt Deleted', `Deleted receipt #${receipt.number}`, receiptId, 'Receipt');
     } catch (error) {
       console.error('Error deleting receipt:', error);
@@ -112,7 +113,7 @@ export default function ClientProfile({ client, onBack, onNavigate }: ClientProf
   const handleAddEvent = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
-    const eventId = await db.events.add({
+    const newEvent = {
       clientId: client.id!,
       title: formData.get('title') as string,
       type: formData.get('type') as string,
@@ -126,9 +127,17 @@ export default function ClientProfile({ client, onBack, onNavigate }: ClientProf
       assignedPlanner: 'Admin User',
       status: 'Proposed',
       requirements: {}
-    });
+    };
 
-    await logActivity(client.id, 'Event Created', `New event added: ${formData.get('title')}`, eventId, 'Event');
+    const { data, error } = await supabase.from('events').insert(newEvent).select().single();
+    if (error) {
+      alert('Error creating event: ' + error.message);
+      return;
+    }
+
+    if (data) {
+      await logActivity(client.id, 'Event Created', `New event added: ${formData.get('title')}`, data.id, 'Event');
+    }
     setIsAddEventModalOpen(false);
   };
 

@@ -11,8 +11,8 @@ import {
   ChevronRight,
   ArrowLeft
 } from 'lucide-react';
-import { useLiveQuery } from 'dexie-react-hooks';
-import { db } from '../db';
+import { useSupabaseQuery } from '../hooks/useSupabaseQuery';
+import { supabase } from '../lib/supabase';
 import { cn, formatCurrency } from '../lib/utils';
 import Modal from './Modal';
 import DocumentGenerator from './DocumentGenerator';
@@ -26,20 +26,20 @@ export default function ReceiptView({ onNavigate }: ReceiptViewProps) {
   const [isViewModalOpen, setIsViewModalOpen] = useState(false);
   const [selectedReceipt, setSelectedReceipt] = useState<any | null>(null);
 
-  const receipts = useLiveQuery(async () => {
-    const rcs = await db.receipts.reverse().toArray();
-    const clients = await db.clients.toArray();
-    const events = await db.events.toArray();
-    
-    return rcs.map(r => ({
+  const { data: allReceipts = [] } = useSupabaseQuery<any>('receipts', (q) => 
+    q.select('*, clients(fullName), events(title)').order('createdAt', { ascending: false })
+  , []);
+
+  const filteredReceipts = React.useMemo(() => {
+    return allReceipts.map(r => ({
       ...r,
-      clientName: clients.find(c => c.id === r.clientId)?.fullName || 'Unknown Client',
-      eventName: events.find(e => e.id === r.eventId)?.title || 'Unknown Event'
+      clientName: r.clients?.fullName || 'Unknown Client',
+      eventName: r.events?.title || 'Unknown Event'
     })).filter(r => 
       r.number.toLowerCase().includes(searchTerm.toLowerCase()) ||
       r.clientName.toLowerCase().includes(searchTerm.toLowerCase())
     );
-  }, [searchTerm]) || [];
+  }, [allReceipts, searchTerm]);
 
   return (
     <div className="space-y-4 md:space-y-6">
@@ -88,7 +88,7 @@ export default function ReceiptView({ onNavigate }: ReceiptViewProps) {
               </tr>
             </thead>
             <tbody className="divide-y divide-black/5">
-              {receipts.map((rcp: any) => (
+              {filteredReceipts.map((rcp: any) => (
                 <tr key={rcp.id} className="hover:bg-bg-base/30 transition-colors group">
                   <td className="px-8 py-6">
                     <div className="flex items-center gap-4">

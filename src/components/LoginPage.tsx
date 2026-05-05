@@ -2,9 +2,8 @@ import React, { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { Mail, Lock, User as UserIcon, ArrowRight, Workflow, AlertCircle, Loader2 } from 'lucide-react';
-import { db } from '../db';
+import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
-import { hashPassword, comparePasswords, isValidEmail, isStrongPassword } from '../lib/auth';
 import { cn } from '../lib/utils';
 
 type AuthMode = 'login' | 'register';
@@ -29,41 +28,32 @@ const LoginPage: React.FC = () => {
 
     try {
       if (mode === 'register') {
-        // Registration Logic
         if (!fullName) throw new Error('Full name is required');
-        if (!isValidEmail(email)) throw new Error('Invalid email format');
-        if (!isStrongPassword(password)) throw new Error('Password must be at least 8 characters');
-
-        const existingUser = await db.users.where('email').equals(email.toLowerCase()).first();
-        if (existingUser) throw new Error('Email already registered');
-
-        const hashedPassword = await hashPassword(password);
-        const userId = await db.users.add({
+        
+        const { data, error } = await supabase.auth.signUp({
           email: email.toLowerCase(),
-          password: hashedPassword,
-          fullName,
-          createdAt: Date.now()
+          password: password,
+          options: {
+            data: {
+              full_name: fullName
+            }
+          }
         });
 
-        const newUser = await db.users.get(userId);
-        if (newUser) {
-          login(newUser);
+        if (error) throw error;
+        if (data.user) {
           navigate(from, { replace: true });
         }
       } else {
-        // Login Logic
-        const user = await db.users.where('email').equals(email.toLowerCase()).first();
-        if (!user || !user.password) {
-          throw new Error('Invalid email or password');
-        }
+        const { data, error } = await supabase.auth.signInWithPassword({
+          email: email.toLowerCase(),
+          password: password,
+        });
 
-        const isMatch = await comparePasswords(password, user.password);
-        if (!isMatch) {
-          throw new Error('Invalid email or password');
+        if (error) throw error;
+        if (data.user) {
+          navigate(from, { replace: true });
         }
-
-        login(user);
-        navigate(from, { replace: true });
       }
     } catch (err: any) {
       setError(err.message || 'An error occurred during authentication');

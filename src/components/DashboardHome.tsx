@@ -11,9 +11,11 @@ import {
   ArrowDownRight,
   History
 } from 'lucide-react';
-import { useLiveQuery } from 'dexie-react-hooks';
-import { db } from '../db';
+import { useSupabaseQuery } from '../hooks/useSupabaseQuery';
+import { supabase } from '../lib/supabase';
+import { useAuth } from '../context/AuthContext';
 import { formatCurrency, cn } from '../lib/utils';
+import { Client, Event, Quotation, Invoice, Payment, ActivityLog, BusinessSettings } from '../types';
 import { 
   BarChart, 
   Bar, 
@@ -32,33 +34,39 @@ interface DashboardHomeProps {
 }
 
 export default function DashboardHome({ onNavigate }: DashboardHomeProps) {
-  const clientCount = useLiveQuery(() => db.clients.count()) || 0;
-  const eventCount = useLiveQuery(() => db.events.where('status').notEqual('Cancelled').count()) || 0;
-  const draftQuotes = useLiveQuery(() => db.quotations.where('status').equals('Draft').count()) || 0;
-  const approvedQuotes = useLiveQuery(() => db.quotations.where('status').equals('Approved').count()) || 0;
-  const settings = (useLiveQuery(() => db.settings.toArray()) || [])[0];
+  const { user } = useAuth();
+  
+  const { data: clients } = useSupabaseQuery<Client>('clients', (q) => q.select('*'));
+  const { data: events } = useSupabaseQuery<Event>('events', (q) => q.select('*').neq('status', 'Cancelled'));
+  const { data: quotations } = useSupabaseQuery<Quotation>('quotations', (q) => q.select('*'));
+  const { data: invoices } = useSupabaseQuery<Invoice>('invoices', (q) => q.select('*'));
+  const { data: payments } = useSupabaseQuery<Payment>('payments', (q) => q.select('*'));
+  const { data: settingsList } = useSupabaseQuery<BusinessSettings>('settings', (q) => q.select('*'));
+  const { data: recentActivity } = useSupabaseQuery<ActivityLog>('activity_logs', (q) => q.select('*').order('timestamp', { ascending: false }).limit(6));
+
+  const clientCount = clients?.length || 0;
+  const eventCount = events?.length || 0;
+  const draftQuotes = quotations?.filter(q => q.status === 'Draft').length || 0;
+  const settings = settingsList?.[0];
   
   const [timeRange, setTimeRange] = useState('month');
 
-  const recentActivity = useLiveQuery(() => 
-    db.activityLogs.orderBy('timestamp').reverse().limit(6).toArray()
-  ) || [];
-
-  const invoices = useLiveQuery(() => db.invoices.toArray()) || [];
-  const totalOutstanding = invoices.reduce((sum, inv) => sum + (inv.grandTotal - inv.amountPaid), 0);
+  const totalOutstanding = invoices?.reduce((sum, inv) => sum + (inv.grandTotal - (inv.amountPaid || 0)), 0) || 0;
   
-  const payments = useLiveQuery(() => db.payments.toArray()) || [];
-  const recentPayments = useLiveQuery(async () => {
-    const ps = await db.payments.reverse().limit(5).toArray();
-    const clients = await db.clients.toArray();
-    return ps.map(p => ({
-      ...p,
-      clientName: clients.find(c => c.id === p.clientId)?.fullName || 'Unknown'
-    }));
-  }) || [];
+  const recentPayments = React.useMemo(() => {
+    if (!payments || !clients) return [];
+    return payments
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+      .slice(0, 5)
+      .map(p => ({
+        ...p,
+        clientName: clients.find(c => c.id === p.clientId)?.fullName || 'Unknown'
+      }));
+  }, [payments, clients]);
+
   const monthEarnings = payments
-    .filter(p => new Date(p.date).getMonth() === new Date().getMonth())
-    .reduce((sum, p) => sum + p.amount, 0);
+    ?.filter(p => new Date(p.date).getMonth() === new Date().getMonth())
+    .reduce((sum, p) => sum + p.amount, 0) || 0;
 
   const stats = [
     { label: 'Total Clients', value: clientCount, icon: Users, color: 'bg-blue-500', trend: '+12%', target: 'clients' },
@@ -81,7 +89,7 @@ export default function DashboardHome({ onNavigate }: DashboardHomeProps) {
       default: startDate.setFullYear(now.getFullYear() - 1);
     }
     
-    const filteredPayments = payments.filter(p => new Date(p.date) >= startDate);
+    const filteredPayments = (payments || []).filter(p => new Date(p.date) >= startDate);
     
     // Aggregate by month for long ranges, days/weeks for short? 
     // Let's just group by month for now, it's safer for starters, 
@@ -111,7 +119,7 @@ export default function DashboardHome({ onNavigate }: DashboardHomeProps) {
       {/* Welcome Section */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 md:p-0">
         <div>
-          <h1 className="text-xl md:text-3xl font-serif font-black text-black">Welcome, {settings?.adminName || 'Admin'}</h1>
+          <h1 className="text-xl md:text-3xl font-serif font-black text-black">Welcome, {user?.user_metadata?.full_name || settings?.adminName || 'Admin'}</h1>
           <p className="text-[10px] md:text-sm text-gray-500 mt-0.5">{settings?.name || 'EventFlow'} Management today.</p>
         </div>
         <div className="flex items-center gap-2 w-full sm:w-auto">

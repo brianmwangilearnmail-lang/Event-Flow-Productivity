@@ -1,16 +1,9 @@
 import React from 'react';
-import { db, logActivity } from '../db';
-import { Invoice, DocumentStatus } from '../types';
-import { formatCurrency } from '../lib/utils';
-import { Save, DollarSign } from 'lucide-react';
-
-interface ReceiptFormProps {
-  invoice: Invoice;
-  onSuccess: () => void;
-}
+import { supabase } from '../lib/supabase';
+import { logActivity } from '../db';
 
 export default function ReceiptForm({ invoice, onSuccess }: ReceiptFormProps) {
-  const balance = invoice.grandTotal - invoice.amountPaid;
+  const balance = invoice.grandTotal - (invoice.amountPaid || 0);
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -26,20 +19,26 @@ export default function ReceiptForm({ invoice, onSuccess }: ReceiptFormProps) {
     }
 
     // 1. Create Payment
-    const paymentId = await db.payments.add({
+    const { data: payResult, error: payError } = await supabase.from('payments').insert({
       clientId: invoice.clientId,
-      invoiceIds: [invoice.id!],
+      invoiceIds: [invoice.id],
       amount,
       date,
       method,
       reference,
       receivedBy: 'Admin User',
       notes: formData.get('notes') as string
-    });
+    }).select();
+
+    if (payError) {
+      alert('Error recording payment: ' + payError.message);
+      return;
+    }
+    const paymentId = payResult[0].id;
 
     // 2. Create Receipt
     const receiptNumber = `RCP-${Date.now().toString().slice(-6)}`;
-    await db.receipts.add({
+    const { error: receiptError } = await supabase.from('receipts').insert({
       number: receiptNumber,
       paymentId,
       clientId: invoice.clientId,
@@ -49,14 +48,24 @@ export default function ReceiptForm({ invoice, onSuccess }: ReceiptFormProps) {
       createdAt: Date.now()
     });
 
+    if (receiptError) {
+      alert('Error creating receipt: ' + receiptError.message);
+      return;
+    }
+
     // 3. Update Invoice
-    const newAmountPaid = invoice.amountPaid + amount;
+    const newAmountPaid = (invoice.amountPaid || 0) + amount;
     const newStatus = newAmountPaid >= invoice.grandTotal ? DocumentStatus.PAID : DocumentStatus.PARTIALLY_PAID;
     
-    await db.invoices.update(invoice.id!, {
+    const { error: invoiceError } = await supabase.from('invoices').update({
       amountPaid: newAmountPaid,
       status: newStatus
-    });
+    }).eq('id', invoice.id);
+
+    if (invoiceError) {
+      alert('Error updating invoice: ' + invoiceError.message);
+      return;
+    }
 
     // 4. Log Activity
     await logActivity(invoice.clientId, 'Payment Recorded', `Payment of ${formatCurrency(amount)} received for Invoice #${invoice.number}`, paymentId, 'Receipt', invoice);

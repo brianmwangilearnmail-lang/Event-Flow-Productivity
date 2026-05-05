@@ -7,10 +7,17 @@
 }
 
 @layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
+
   body {
     background-color: var(--color-bg-base);
     color: var(--color-text-main);
     overflow-x: hidden;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
   }
 
   ::-webkit-scrollbar {
@@ -26,5 +33,63 @@
   .custom-scrollbar::-webkit-scrollbar-thumb {
     background: #e5e7eb;
     border-radius: 10px;
+  }
+
+  /* Smooth scrolling on touch devices */
+  .doc-scroll-container {
+    -webkit-overflow-scrolling: touch;
+    overflow-x: auto;
+    overflow-y: auto;
+  }
+}
+
+/* ─── Print Styles ─────────────────────────────────────────────────────────── */
+@media print {
+  @page {
+    size: A4 portrait;
+    margin: 0;
+  }
+
+  /* Hide everything except the document */
+  body * {
+    visibility: hidden;
+  }
+
+  #print-document,
+  #print-document * {
+    visibility: visible;
+  }
+
+  #print-document {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 210mm;
+    min-height: 297mm;
+    max-width: 210mm;
+    margin: 0;
+    padding: 16mm 14mm;
+    box-shadow: none !important;
+    border-radius: 0 !important;
+    background: #ffffff !important;
+    color: #000000 !important;
+  }
+
+  /* Force all text visible in print */
+  #print-document p,
+  #print-document span,
+  #print-document h1,
+  #print-document h2,
+  #print-document h3,
+  #print-document h4,
+  #print-document td,
+  #print-document th {
+    color: inherit !important;
+  }
+
+  /* Avoid page breaks inside rows */
+  #print-document tr,
+  #print-document td {
+    page-break-inside: avoid;
   }
 }

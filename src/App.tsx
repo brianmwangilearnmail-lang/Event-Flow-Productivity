@@ -25,8 +25,8 @@ import {
   Plus
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { db } from './db';
-import { useLiveQuery } from 'dexie-react-hooks';
+import { useSupabaseQuery } from './hooks/useSupabaseQuery';
+import { supabase } from './lib/supabase';
 import { cn } from './lib/utils';
 
 // Views
@@ -70,36 +70,8 @@ function DashboardContent() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const { user, logout } = useAuth();
 
-  // Ensure default settings exist
-  const settings = useLiveQuery(() => db.settings.toArray()) || [];
-
-  useEffect(() => {
-    const initSettings = async () => {
-      if (settings.length === 0) {
-        await db.settings.add({
-          name: 'EventFlow',
-          brandColors: {
-            primary: '#000000',
-            secondary: '#D4AF37',
-            accent: '#FFFFFF'
-          },
-          phone: '+256 000 000 000',
-          email: 'info@eventflow.com',
-          address: 'Kampala, Uganda',
-          footerText: 'Thank you for choosing EventFlow',
-          paymentInstructions: 'Bank: X Bank\nAccount: 0000000000',
-          terms: 'Subject to terms and conditions.',
-          defaultValidityDays: 14,
-          currency: 'KES',
-          taxRate: 0,
-          adminName: 'Admin'
-        });
-      } else if (settings[0].currency === 'UGX') {
-        await db.settings.update(settings[0].id!, { currency: 'KES' });
-      }
-    };
-    initSettings();
-  }, [settings]);
+  const { data: settingsList = [] } = useSupabaseQuery<BusinessSettings>('settings', (q) => q.select('*'));
+  const settings = settingsList[0];
 
   const navItems = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -223,10 +195,10 @@ function DashboardContent() {
             </button>
             <div className="flex items-center gap-3 pl-6 border-l border-gray-100">
                <div className="text-right">
-                <p className="text-[10px] font-black uppercase tracking-widest text-black">{user?.fullName || settings[0]?.adminName || 'Admin'}</p>
+                <p className="text-[10px] font-black uppercase tracking-widest text-black">{user?.user_metadata?.full_name || settings?.adminName || 'Admin'}</p>
               </div>
               <div className="w-8 h-8 rounded-full bg-black flex items-center justify-center text-white font-serif italic text-xs">
-                {(user?.fullName || settings[0]?.adminName || 'A')[0].toUpperCase()}
+                {(user?.user_metadata?.full_name || settings?.adminName || 'A')[0].toUpperCase()}
               </div>
             </div>
           </div>

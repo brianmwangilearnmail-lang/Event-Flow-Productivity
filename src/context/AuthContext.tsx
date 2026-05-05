@@ -1,55 +1,42 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { User } from '../types';
-import { db } from '../db';
+import { supabase } from '../lib/supabase';
+import { User as SupabaseUser } from '@supabase/supabase-js';
 
 interface AuthContextType {
-  user: User | null;
+  user: SupabaseUser | null;
   loading: boolean;
-  login: (user: User) => void;
-  logout: () => void;
+  logout: () => Promise<void>;
   isAuthenticated: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<SupabaseUser | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Check if user is logged in from localStorage on mount
-    const savedUser = localStorage.getItem('eventflow_user');
-    if (savedUser) {
-      try {
-        const parsedUser = JSON.parse(savedUser);
-        // Basic check to see if user still exists in DB (optional but safer)
-        setUser(parsedUser);
-      } catch (e) {
-        localStorage.removeItem('eventflow_user');
-      }
-    }
-    setLoading(false);
+    // Check active sessions and sets the user
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setUser(session?.user ?? null);
+      setLoading(false);
+    });
+
+    // Listen for changes on auth state (logged in, signed out, etc.)
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user ?? null);
+      setLoading(false);
+    });
+
+    return () => subscription.unsubscribe();
   }, []);
 
-  const login = (userData: User) => {
-    // Remove password before storing in state/localStorage
-    const { password, ...safeUser } = userData;
-    setUser(safeUser as User);
-    localStorage.setItem('eventflow_user', JSON.stringify(safeUser));
-    
-    // Update last login in DB
-    if (userData.id) {
-      db.users.update(userData.id, { lastLogin: Date.now() });
-    }
-  };
-
-  const logout = () => {
-    setUser(null);
-    localStorage.removeItem('eventflow_user');
+  const logout = async () => {
+    await supabase.auth.signOut();
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, logout, isAuthenticated: !!user }}>
+    <AuthContext.Provider value={{ user, loading, logout, isAuthenticated: !!user }}>
       {children}
     </AuthContext.Provider>
   );

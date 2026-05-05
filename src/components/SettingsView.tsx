@@ -11,19 +11,21 @@ import {
   CheckCircle2,
   Image as ImageIcon
 } from 'lucide-react';
-import { useLiveQuery } from 'dexie-react-hooks';
-import { db, logActivity } from '../db';
+import { useSupabaseQuery } from '../hooks/useSupabaseQuery';
+import { supabase } from '../lib/supabase';
+import { logActivity } from '../db';
 import { BusinessSettings } from '../types';
-import { cn } from '../lib/utils';
+import { cn, compressImage } from '../lib/utils';
 
 export default function SettingsView() {
-  const settings = useLiveQuery(() => db.settings.toArray()) || [];
+  const { data: settingsList = [] } = useSupabaseQuery<BusinessSettings>('settings', (q) => q.select('*'));
+  const settings = settingsList?.[0];
   const [formData, setFormData] = useState<Partial<BusinessSettings>>({});
   const [isSaved, setIsSaved] = useState(false);
 
   useEffect(() => {
-    if (settings.length > 0) {
-      setFormData(settings[0]);
+    if (settings) {
+      setFormData(settings);
     }
   }, [settings]);
 
@@ -44,8 +46,12 @@ export default function SettingsView() {
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (settings.length > 0) {
-      await db.settings.update(settings[0].id!, formData);
+    if (settings?.id) {
+      const { error } = await supabase.from('settings').update(formData).eq('id', settings.id);
+      if (error) {
+        alert('Error saving settings: ' + error.message);
+        return;
+      }
       logActivity(undefined, 'Settings Updated', 'Business settings and branding were updated');
       setIsSaved(true);
       setTimeout(() => setIsSaved(false), 3000);
@@ -83,8 +89,9 @@ export default function SettingsView() {
                     const file = e.target.files?.[0];
                     if (file) {
                       const reader = new FileReader();
-                      reader.onloadend = () => {
-                        setFormData(prev => ({ ...prev, logoUrl: reader.result as string }));
+                      reader.onloadend = async () => {
+                        const compressed = await compressImage(reader.result as string, 400); // Smaller size for logo
+                        setFormData(prev => ({ ...prev, logoUrl: compressed }));
                       };
                       reader.readAsDataURL(file);
                     }

@@ -1,7 +1,7 @@
-import React, { useState, useMemo } from 'react';
-import { db, logActivity } from '../db';
-import { Client, DocumentStatus, QuotationLineItem, CatalogItem, Quotation } from '../types';
-import { useLiveQuery } from 'dexie-react-hooks';
+import { useSupabaseQuery } from '../hooks/useSupabaseQuery';
+import { supabase } from '../lib/supabase';
+import { logActivity } from '../db';
+import { Client, DocumentStatus, QuotationLineItem, CatalogItem, Quotation, Event } from '../types';
 import { Plus, Trash2, Search, Package, FileText, ChevronRight } from 'lucide-react';
 import { formatCurrency, cn } from '../lib/utils';
 import Modal from './Modal';
@@ -19,7 +19,9 @@ export default function InvoiceForm({ client, onSuccess }: InvoiceFormProps) {
   const [isItemFinderOpen, setIsItemFinderOpen] = useState(false);
   const [isQuotationPickerOpen, setIsQuotationPickerOpen] = useState(false);
 
-  const events = useLiveQuery(() => db.events.where('clientId').equals(client.id!).toArray());
+  const { data: events = [] } = useSupabaseQuery<Event>('events', (q) => 
+    q.select('*').eq('clientId', client.id).order('date')
+  , [client.id]);
   
   React.useEffect(() => {
     if (events?.length === 1 && !selectedEventId) {
@@ -27,10 +29,13 @@ export default function InvoiceForm({ client, onSuccess }: InvoiceFormProps) {
     }
   }, [events]);
 
-  const catalogItems = useLiveQuery(() => db.catalog.filter(i => !i.isArchived).toArray()) || [];
-  const quotations = useLiveQuery(() => 
-    db.quotations.where('clientId').equals(client.id!).reverse().toArray()
-  ) || [];
+  const { data: catalogItems = [] } = useSupabaseQuery<CatalogItem>('catalog', (q) => 
+    q.select('*').eq('isArchived', false).order('name')
+  , []);
+  
+  const { data: quotations = [] } = useSupabaseQuery<Quotation>('quotations', (q) => 
+    q.select('*').eq('clientId', client.id).order('createdAt', { ascending: false })
+  , [client.id]);
 
   const totals = useMemo(() => {
     const subtotal = lineItems.reduce((sum, item) => sum + (item.quantity * item.unitPrice * (1 - item.discount/100)), 0);
@@ -82,8 +87,8 @@ export default function InvoiceForm({ client, onSuccess }: InvoiceFormProps) {
       return;
     }
 
-    const invoiceId = await db.invoices.add({
-      clientId: client.id!,
+    const invoiceData = {
+      clientId: client.id,
       eventId: selectedEventId,
       number: `INV-${Date.now().toString().slice(-6)}`,
       type: 'Full',
@@ -97,8 +102,15 @@ export default function InvoiceForm({ client, onSuccess }: InvoiceFormProps) {
       amountPaid: 0,
       grandTotal: totals.grandTotal,
       notes
-    });
+    };
 
+    const { data: result, error } = await supabase.from('invoices').insert(invoiceData).select();
+    if (error) {
+      alert('Error saving invoice: ' + error.message);
+      return;
+    }
+
+    const invoiceId = result[0].id;
     logActivity(client.id, 'Invoice Created', `Invoice created with ${lineItems.length} items for ${formatCurrency(totals.grandTotal)}`, Number(invoiceId), 'Invoice');
     onSuccess();
   };

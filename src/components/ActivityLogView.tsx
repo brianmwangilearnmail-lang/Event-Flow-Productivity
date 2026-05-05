@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { useLiveQuery } from 'dexie-react-hooks';
-import { db, logActivity } from '../db';
+import { useSupabaseQuery } from '../hooks/useSupabaseQuery';
+import { supabase } from '../lib/supabase';
+import { logActivity } from '../db';
 import { ActivityLog, DocumentStatus } from '../types';
 import { 
   History, 
@@ -26,10 +27,9 @@ export default function ActivityLogView() {
   const [selectedDoc, setSelectedDoc] = useState<{ type: string, data: any } | null>(null);
   const [isViewModalOpen, setIsViewModalOpen] = useState(false);
 
-  const logs = useLiveQuery(async () => {
-    const allLogs = await db.activityLogs.reverse().toArray();
-    return allLogs;
-  }) || [];
+  const { data: logs = [] } = useSupabaseQuery<ActivityLog>('activity_logs', (q) => 
+    q.select('*').order('timestamp', { ascending: false })
+  , []);
 
   const filteredLogs = logs.filter(log => {
     const matchesSearch = log.description.toLowerCase().includes(searchTerm.toLowerCase()) || 
@@ -43,23 +43,21 @@ export default function ActivityLogView() {
     
     try {
       let data = null;
-      switch (log.linkedType) {
-        case 'Quotation':
-          data = await db.quotations.get(log.linkedId);
-          break;
-        case 'Invoice':
-          data = await db.invoices.get(log.linkedId);
-          break;
-        case 'Receipt':
-          data = await db.receipts.get(log.linkedId);
-          break;
-        case 'Client':
-          data = await db.clients.get(log.linkedId);
-          break;
-      }
+      const tableMap: Record<string, string> = {
+        'Quotation': 'quotations',
+        'Invoice': 'invoices',
+        'Receipt': 'receipts',
+        'Client': 'clients',
+        'Event': 'events'
+      };
 
-      if (data) {
-        setSelectedDoc({ type: log.linkedType, data });
+      const tableName = tableMap[log.linkedType];
+      if (!tableName) return;
+
+      const { data: result, error } = await supabase.from(tableName).select('*').eq('id', log.linkedId).single();
+
+      if (result) {
+        setSelectedDoc({ type: log.linkedType, data: result });
         setIsViewModalOpen(true);
       } else {
         alert('Record no longer exists.');
@@ -83,46 +81,31 @@ export default function ActivityLogView() {
       if (!type || !id) return;
 
       let success = false;
-      switch (type) {
-        case 'Client':
-          await db.clients.put({ ...log.revertData, id });
-          success = true;
-          break;
-        case 'Event':
-          await db.events.put({ ...log.revertData, id });
-          success = true;
-          break;
-        case 'Quotation':
-          await db.quotations.put({ ...log.revertData, id });
-          success = true;
-          break;
-        case 'Invoice':
-          await db.invoices.put({ ...log.revertData, id });
-          success = true;
-          break;
-        case 'Receipt':
-          // Reverting a payment means deleting the receipt, the payment, and reverting the invoice
-          if (log.revertData && log.linkedId) {
-            // Revert the invoice
-            await db.invoices.put({ ...log.revertData, id: log.revertData.id });
-            
-            // Delete the related receipt and payment
-            const receipt = await db.receipts.where('paymentId').equals(log.linkedId).first();
-            if (receipt) {
-              await db.receipts.delete(receipt.id!);
-            }
-            await db.payments.delete(log.linkedId);
-            success = true;
+      const tableMap: Record<string, string> = {
+        'Client': 'clients',
+        'Event': 'events',
+        'Quotation': 'quotations',
+        'Invoice': 'invoices',
+        'Catalog': 'catalog'
+      };
+
+      if (tableMap[type]) {
+        const { error } = await supabase.from(tableMap[type]).upsert({ ...log.revertData, id });
+        if (!error) success = true;
+      } else if (type === 'Receipt') {
+        if (log.revertData && log.linkedId) {
+          await supabase.from('invoices').upsert({ ...log.revertData, id: log.revertData.id });
+          const { data: receipt } = await supabase.from('receipts').select('id').eq('paymentId', log.linkedId).single();
+          if (receipt) {
+            await supabase.from('receipts').delete().eq('id', receipt.id);
           }
-          break;
-        case 'Catalog':
-          await db.catalog.put({ ...log.revertData, id });
+          await supabase.from('payments').delete().eq('id', log.linkedId);
           success = true;
-          break;
+        }
       }
 
       if (success) {
-        await db.activityLogs.update(log.id!, { isReverted: true });
+        await supabase.from('activity_logs').update({ isReverted: true }).eq('id', log.id!);
         await logActivity(
           log.clientId, 
           'Action Undone', 

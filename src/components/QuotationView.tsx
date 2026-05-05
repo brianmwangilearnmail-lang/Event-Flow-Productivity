@@ -20,8 +20,9 @@ import {
   ArrowLeft,
   MoreHorizontal
 } from 'lucide-react';
-import { useLiveQuery } from 'dexie-react-hooks';
-import { db, logActivity } from '../db';
+import { useSupabaseQuery } from '../hooks/useSupabaseQuery';
+import { supabase } from '../lib/supabase';
+import { logActivity } from '../db';
 import { Quotation, DocumentStatus } from '../types';
 import Modal from './Modal';
 import { cn, formatCurrency } from '../lib/utils';
@@ -39,12 +40,13 @@ export default function QuotationView({ onNavigate }: QuotationViewProps) {
   const [selectedQuote, setSelectedQuote] = useState<Quotation | null>(null);
   const [statusFilter, setStatusFilter] = useState<DocumentStatus | 'All'>('All');
 
-  const quotations = useLiveQuery(async () => {
-    const quotes = await db.quotations.reverse().toArray();
-    const clients = await db.clients.toArray();
-    const events = await db.events.toArray();
-    
-    return quotes.map(q => {
+  const { data: quotations = [] } = useSupabaseQuery<any>('quotations', (q) => {
+    let query = q.select('*, clients(fullName), events(title)').order('createdAt', { ascending: false });
+    return query;
+  }, []);
+
+  const filteredQuotations = React.useMemo(() => {
+    return quotations.map(q => {
       const validUntil = new Date(q.validUntil);
       const today = new Date();
       today.setHours(0, 0, 0, 0);
@@ -54,8 +56,8 @@ export default function QuotationView({ onNavigate }: QuotationViewProps) {
       return {
         ...q,
         daysLeft,
-        clientName: clients.find(c => c.id === q.clientId)?.fullName || 'Unknown Client',
-        eventName: events.find(e => e.id === q.eventId)?.title || 'Unknown Event'
+        clientName: q.clients?.fullName || 'Unknown Client',
+        eventName: q.events?.title || 'Unknown Event'
       };
     }).filter(q => {
       const matchesSearch = q.number.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -66,21 +68,29 @@ export default function QuotationView({ onNavigate }: QuotationViewProps) {
       
       return matchesSearch && matchesStatus;
     });
-  }, [searchTerm, statusFilter]) || [];
+  }, [quotations, searchTerm, statusFilter]);
 
   const handleStatusChange = async (id: number, status: DocumentStatus) => {
-    const existing = await db.quotations.get(id);
+    const { data: existing, error: fetchError } = await supabase.from('quotations').select('*').eq('id', id).single();
+    if (fetchError) return;
+
+    const { error: updateError } = await supabase.from('quotations').update({ status }).eq('id', id);
+    if (updateError) return;
+
     if (existing) {
-      await db.quotations.update(id, { status });
       await logActivity(existing.clientId, 'Quotation Updated', `Quote #${existing.number} status changed to ${status}`, id, 'Quotation', existing);
     }
   };
 
   const deleteQuotation = async (id: number) => {
     if (confirm('Are you sure you want to delete this quotation?')) {
-      const existing = await db.quotations.get(id);
+      const { data: existing } = await supabase.from('quotations').select('*').eq('id', id).single();
       if (existing) {
-        await db.quotations.delete(id);
+        const { error } = await supabase.from('quotations').delete().eq('id', id);
+        if (error) {
+          alert('Error deleting quotation: ' + error.message);
+          return;
+        }
         await logActivity(existing.clientId, 'Record Deleted', `Quotation #${existing.number} was deleted`, id, 'Quotation', existing);
       }
     }
@@ -158,7 +168,7 @@ export default function QuotationView({ onNavigate }: QuotationViewProps) {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
-              {quotations.map((quote: any) => (
+              {filteredQuotations.map((quote: any) => (
                 <tr key={quote.id} className="hover:bg-gray-50/50 transition-colors group">
                   <td className="px-6 py-5">
                     <div className="flex items-center gap-4">

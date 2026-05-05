@@ -15,8 +15,9 @@ import {
   AlertCircle,
   Edit2
 } from 'lucide-react';
-import { useLiveQuery } from 'dexie-react-hooks';
-import { db, logActivity } from '../db';
+import { useSupabaseQuery } from '../hooks/useSupabaseQuery';
+import { supabase } from '../lib/supabase';
+import { logActivity } from '../db';
 import { cn } from '../lib/utils';
 import { EventType, Event } from '../types';
 import Modal from './Modal';
@@ -33,24 +34,23 @@ export default function EventView({ onNavigate }: EventViewProps) {
   const [editingEvent, setEditingEvent] = useState<Event | null>(null);
   const [managingEventId, setManagingEventId] = useState<number | null>(null);
 
-  const clients = useLiveQuery(() => db.clients.toArray()) || [];
-  const events = useLiveQuery(async () => {
-    const evs = await db.events.reverse().toArray();
-    const clientsData = await db.clients.toArray();
-    
-    return evs.map(e => ({
-      ...e,
-      clientName: clientsData.find(c => c.id === e.clientId)?.fullName || 'Unknown Client'
-    })).filter(e => 
-      e.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      e.clientName.toLowerCase().includes(searchTerm.toLowerCase())
-    );
-  }, [searchTerm]) || [];
+  const { data: clients = [] } = useSupabaseQuery<any>('clients', (q) => q.select('*'));
+  const { data: events = [] } = useSupabaseQuery<any>('events', (q) => {
+    let query = q.select('*, clients(fullName)').order('date', { ascending: false });
+    if (searchTerm) {
+      query = query.or(`title.ilike.%${searchTerm}%,clients.fullName.ilike.%${searchTerm}%`);
+    }
+    return query;
+  }, [searchTerm]);
 
   const handleUpdateStatus = async (eventId: number, status: string) => {
     try {
-      await db.events.update(eventId, { status });
-      const event = await db.events.get(eventId);
+      const { data: event, error: fetchError } = await supabase.from('events').select('*').eq('id', eventId).single();
+      if (fetchError) throw fetchError;
+
+      const { error: updateError } = await supabase.from('events').update({ status }).eq('id', eventId);
+      if (updateError) throw updateError;
+
       if (event) {
         await logActivity(event.clientId, 'Event Status Updated', `Status changed to ${status}`, eventId, 'Event');
       }
@@ -80,11 +80,21 @@ export default function EventView({ onNavigate }: EventViewProps) {
     };
 
     if (editingEvent?.id) {
-      await db.events.update(editingEvent.id, eventData);
+      const { error } = await supabase.from('events').update(eventData).eq('id', editingEvent.id);
+      if (error) {
+        alert('Error updating event: ' + error.message);
+        return;
+      }
       await logActivity(eventData.clientId, 'Event Updated', `Updated event: ${eventData.title}`, editingEvent.id, 'Event');
     } else {
-      const id = await db.events.add(eventData);
-      await logActivity(eventData.clientId, 'Event Created', `Created event: ${eventData.title}`, id, 'Event');
+      const { data, error } = await supabase.from('events').insert(eventData).select().single();
+      if (error) {
+        alert('Error creating event: ' + error.message);
+        return;
+      }
+      if (data) {
+        await logActivity(eventData.clientId, 'Event Created', `Created event: ${eventData.title}`, data.id, 'Event');
+      }
     }
     
     setIsModalOpen(false);
@@ -103,7 +113,11 @@ export default function EventView({ onNavigate }: EventViewProps) {
 
   const handleDeleteEvent = async (id: number, title: string, clientId: number) => {
     if (window.confirm(`Are you sure you want to delete the event: ${title}?`)) {
-      await db.events.delete(id);
+      const { error } = await supabase.from('events').delete().eq('id', id);
+      if (error) {
+        alert('Error deleting event: ' + error.message);
+        return;
+      }
       await logActivity(clientId, 'Event Deleted', `Deleted event: ${title}`);
     }
   };
@@ -168,7 +182,7 @@ export default function EventView({ onNavigate }: EventViewProps) {
             <div className="p-5 flex-1 min-w-0 flex items-center justify-between">
               <div className="min-w-0">
                 <h3 className="text-sm font-black text-black leading-tight truncate">{event.title}</h3>
-                <p className="text-[10px] text-black/40 uppercase tracking-widest font-black mt-1 truncate">{event.clientName}</p>
+                <p className="text-[10px] text-black/40 uppercase tracking-widest font-black mt-1 truncate">{event.clients?.fullName || 'Unknown Client'}</p>
                 <p className="text-[9px] text-gray-400 mt-2 flex items-center gap-1">
                   <MapPin size={10} /> {event.venueName}
                 </p>

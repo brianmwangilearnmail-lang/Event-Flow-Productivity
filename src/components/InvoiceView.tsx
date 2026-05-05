@@ -17,8 +17,9 @@ import {
   MoreHorizontal,
   Eye
 } from 'lucide-react';
-import { useLiveQuery } from 'dexie-react-hooks';
-import { db, logActivity } from '../db';
+import { useSupabaseQuery } from '../hooks/useSupabaseQuery';
+import { supabase } from '../lib/supabase';
+import { logActivity } from '../db';
 import { Invoice, DocumentStatus, Client } from '../types';
 import { cn, formatCurrency } from '../lib/utils';
 import ReceiptForm from './ReceiptForm';
@@ -42,13 +43,15 @@ export default function InvoiceView({ onNavigate }: InvoiceViewProps) {
   const [invoiceToDelete, setInvoiceToDelete] = useState<Invoice | null>(null);
   const [deleteReason, setDeleteReason] = useState("");
 
-  const invoices = useLiveQuery(async () => {
-    const invs = await db.invoices.reverse().toArray();
-    const clients = await db.clients.toArray();
-    
-    return invs.map(i => ({
+  const { data: invoices = [] } = useSupabaseQuery<any>('invoices', (q) => {
+    let query = q.select('*, clients(fullName)').order('createdAt', { ascending: false });
+    return query;
+  }, []);
+
+  const filteredInvoices = React.useMemo(() => {
+    return invoices.map(i => ({
       ...i,
-      clientName: clients.find(c => c.id === i.clientId)?.fullName || 'Unknown Client',
+      clientName: i.clients?.fullName || 'Unknown Client',
     })).filter(i => {
       const matchesSearch = i.number.toLowerCase().includes(searchTerm.toLowerCase()) ||
         i.clientName.toLowerCase().includes(searchTerm.toLowerCase());
@@ -57,15 +60,19 @@ export default function InvoiceView({ onNavigate }: InvoiceViewProps) {
       
       return matchesSearch && matchesStatus;
     });
-  }, [searchTerm, statusFilter]) || [];
+  }, [invoices, searchTerm, statusFilter]);
 
-  const clients = useLiveQuery(() => db.clients.toArray()) || [];
+  const { data: clients = [] } = useSupabaseQuery<Client>('clients', (q) => q.select('*'));
 
   const handleStatusChange = async (invoice: any, status: DocumentStatus) => {
     try {
-      const existing = await db.invoices.get(invoice.id);
+      const { data: existing, error: fetchError } = await supabase.from('invoices').select('*').eq('id', invoice.id).single();
+      if (fetchError) throw fetchError;
+
+      const { error: updateError } = await supabase.from('invoices').update({ status }).eq('id', invoice.id);
+      if (updateError) throw updateError;
+
       if (existing) {
-        await db.invoices.update(invoice.id, { status });
         await logActivity(
           invoice.clientId,
           'Updated Invoice Status',
@@ -93,9 +100,13 @@ export default function InvoiceView({ onNavigate }: InvoiceViewProps) {
     }
     
     try {
-      const existing = await db.invoices.get(invoiceToDelete.id);
+      const { data: existing } = await supabase.from('invoices').select('*').eq('id', invoiceToDelete.id).single();
       if (existing) {
-        await db.invoices.delete(invoiceToDelete.id);
+        const { error } = await supabase.from('invoices').delete().eq('id', invoiceToDelete.id);
+        if (error) {
+          alert('Error deleting invoice: ' + error.message);
+          return;
+        }
         await logActivity(
           invoiceToDelete.clientId,
           'Record Deleted',
@@ -181,7 +192,7 @@ export default function InvoiceView({ onNavigate }: InvoiceViewProps) {
               </tr>
             </thead>
             <tbody className="divide-y divide-black/5">
-              {invoices.map((inv: any) => (
+              {filteredInvoices.map((inv: any) => (
                 <tr key={inv.id} className="hover:bg-bg-base/30 transition-colors group">
                   <td className="px-8 py-6">
                     <div className="flex items-center gap-4">
@@ -209,9 +220,9 @@ export default function InvoiceView({ onNavigate }: InvoiceViewProps) {
                   <td className="px-8 py-6 text-right">
                     <p className={cn(
                       "font-serif text-lg tracking-tight italic",
-                      inv.grandTotal - inv.amountPaid > 0 ? "text-gold-deep" : "text-black/10"
+                      inv.grandTotal - (inv.amountPaid || 0) > 0 ? "text-gold-deep" : "text-black/10"
                     )}>
-                      {inv.grandTotal - inv.amountPaid > 0 ? formatCurrency(inv.grandTotal - inv.amountPaid) : 'Settled'}
+                      {inv.grandTotal - (inv.amountPaid || 0) > 0 ? formatCurrency(inv.grandTotal - (inv.amountPaid || 0)) : 'Settled'}
                     </p>
                   </td>
                   <td className="px-8 py-6 text-right">
@@ -299,7 +310,7 @@ export default function InvoiceView({ onNavigate }: InvoiceViewProps) {
                   <div className="min-w-0">
                     <p className="font-bold text-sm truncate">#{inv.number} • {inv.clientName}</p>
                     <p className="text-[10px] text-gray-400 uppercase tracking-tight truncate">
-                      {inv.type} • {formatCurrency(inv.grandTotal - inv.amountPaid)} Due
+                      {inv.type} • {formatCurrency(inv.grandTotal - (inv.amountPaid || 0))} Due
                     </p>
                   </div>
                 </div>

@@ -14,8 +14,9 @@ import {
   Briefcase,
   Image as ImageIcon
 } from 'lucide-react';
-import { useLiveQuery } from 'dexie-react-hooks';
-import { db, logActivity } from '../db';
+import { useSupabaseQuery } from '../hooks/useSupabaseQuery';
+import { supabase } from '../lib/supabase';
+import { logActivity } from '../db';
 import { 
   Client, 
   Event, 
@@ -43,16 +44,20 @@ export default function QuotationBuilder({ isOpen, onClose, initialQuotation }: 
   const [isItemFinderOpen, setIsItemFinderOpen] = useState(false);
   const [priceMode, setPriceMode] = useState<'client' | 'supplier'>('client');
 
-  const clients = useLiveQuery(() => db.clients.toArray()) || [];
-  const events = useLiveQuery(() => 
-    selectedClientId ? db.events.where('clientId').equals(selectedClientId).toArray() : []
-  , [selectedClientId]) || [];
-  const catalogItems = useLiveQuery(() => db.catalog.filter(i => !i.isArchived).toArray()) || [];
-  const settings = useLiveQuery(() => db.settings.toArray()) || [];
+  const { data: clients = [] } = useSupabaseQuery<Client>('clients', (q) => q.select('*').order('fullName'));
+  const { data: events = [] } = useSupabaseQuery<Event>('events', (q) => {
+    if (selectedClientId) {
+      return q.select('*').eq('clientId', selectedClientId).order('date');
+    }
+    return q.select('*').limit(0);
+  }, [selectedClientId]);
+  const { data: catalogItems = [] } = useSupabaseQuery<CatalogItem>('catalog', (q) => q.select('*').eq('isArchived', false).order('name'));
+  const { data: settingsList = [] } = useSupabaseQuery<BusinessSettings>('settings', (q) => q.select('*'));
+  const settings = settingsList?.[0];
 
   useEffect(() => {
-    if (settings.length > 0) {
-      setTaxRate(settings[0].taxRate);
+    if (settings) {
+      setTaxRate(settings.taxRate);
     }
   }, [settings]);
 
@@ -108,8 +113,8 @@ export default function QuotationBuilder({ isOpen, onClose, initialQuotation }: 
       eventId: selectedEventId,
       number: `QTN-${Date.now().toString().slice(-6)}`,
       date: new Date().toISOString().split('T')[0],
-      validUntil: new Date(Date.now() + (settings[0]?.defaultValidityDays || 14) * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-      currency: settings[0]?.currency || 'KES',
+      validUntil: new Date(Date.now() + (settings?.defaultValidityDays || 14) * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+      currency: settings?.currency || 'KES',
       status,
       items: lineItems,
       subtotal: totals.subtotal,
@@ -123,7 +128,12 @@ export default function QuotationBuilder({ isOpen, onClose, initialQuotation }: 
       createdAt: Date.now()
     };
 
-    const id = await db.quotations.add(quotation as Quotation);
+    const { data: result, error } = await supabase.from('quotations').insert(quotation).select();
+    if (error) {
+      alert('Error saving quotation: ' + error.message);
+      return;
+    }
+    const id = result[0].id;
     await logActivity(selectedClientId, 'Quotation Created', `New quotation #${quotation.number} saved as ${status}`, id, 'Quotation');
     onClose();
   };

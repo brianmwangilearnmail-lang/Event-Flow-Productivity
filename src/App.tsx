@@ -45,12 +45,14 @@ import { Routes, Route, Navigate } from 'react-router-dom';
 import { useAuth } from './context/AuthContext';
 import ProtectedRoute from './components/ProtectedRoute';
 import LoginPage from './components/LoginPage';
+import LandingPage from './components/LandingPage';
 
 type AppView = 'dashboard' | 'clients' | 'events' | 'quotations' | 'invoices' | 'receipts' | 'catalog' | 'history' | 'settings' | 'documents';
 
 export default function App() {
   return (
     <Routes>
+      <Route path="/" element={<LandingPage />} />
       <Route path="/login" element={<LoginPage />} />
       <Route 
         path="/*" 

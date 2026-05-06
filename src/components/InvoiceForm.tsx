@@ -1,3 +1,4 @@
+import React, { useState, useMemo } from 'react';
 import { useSupabaseQuery } from '../hooks/useSupabaseQuery';
 import { supabase } from '../lib/supabase';
 import { logActivity } from '../db';

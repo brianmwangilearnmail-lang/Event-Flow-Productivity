@@ -157,6 +157,7 @@ export default function DocumentGenerator({ type, data, onClose }: DocumentGener
             minWidth: '320px',       /* never narrower than a small phone */
             padding: 'clamp(16px, 5vw, 64px)',  /* fluid inner padding: tight on mobile, spacious on desktop */
             boxSizing: 'border-box',
+            fontFamily: settings.documentFont || 'Inter, sans-serif'
           }}
         >
           {/* Header */}

@@ -23,7 +23,8 @@ import {
   CatalogItem, 
   Quotation, 
   DocumentStatus, 
-  QuotationLineItem 
+  QuotationLineItem,
+  BusinessSettings
 } from '../types';
 import { cn, formatCurrency } from '../lib/utils';
 import Modal from './Modal';
@@ -124,8 +125,7 @@ export default function QuotationBuilder({ isOpen, onClose, initialQuotation }: 
       depositRequired,
       grandTotal: totals.grandTotal,
       version: 1,
-      preparedBy: 'Admin User',
-      createdAt: Date.now()
+      preparedBy: 'Admin User'
     };
 
     const { data: result, error } = await supabase.from('quotations').insert(quotation).select();

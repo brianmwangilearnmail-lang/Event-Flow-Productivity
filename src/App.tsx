@@ -3,7 +3,31 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Component, ReactNode } from 'react';
+
+// ─── Error Boundary ─────────────────────────────────────────────────────────
+interface EBState { hasError: boolean; error: Error | null; }
+class ErrorBoundary extends Component<{ children: ReactNode }, EBState> {
+  state: EBState = { hasError: false, error: null };
+  static getDerivedStateFromError(error: Error): EBState {
+    return { hasError: true, error };
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: '#0a0a0a', color: '#fff', fontFamily: 'monospace', padding: '2rem', gap: '1rem' }}>
+          <h1 style={{ color: '#B8860B', fontSize: '1.5rem', fontWeight: 'bold' }}>⚠ Application Error</h1>
+          <p style={{ color: '#aaa', fontSize: '0.85rem' }}>The dashboard crashed. Error details:</p>
+          <pre style={{ background: '#1a1a1a', padding: '1rem', borderRadius: '8px', color: '#f87171', fontSize: '0.75rem', maxWidth: '900px', whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>
+            {this.state.error?.message}\n\n{this.state.error?.stack}
+          </pre>
+          <button onClick={() => window.location.reload()} style={{ marginTop: '1rem', padding: '0.75rem 2rem', background: '#B8860B', color: '#000', border: 'none', borderRadius: '4px', fontWeight: 'bold', cursor: 'pointer' }}>Reload</button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 import { 
   Users, 
   Calendar, 
@@ -39,6 +63,7 @@ import SettingsView from './components/SettingsView';
 import DashboardHome from './components/DashboardHome';
 import EventView from './components/EventView';
 import DocumentsView from './components/DocumentsView';
+import { BusinessSettings } from './types';
 import ActivityLogView from './components/ActivityLogView';
 import { Files } from 'lucide-react';
 import { Routes, Route, Navigate } from 'react-router-dom';
@@ -58,7 +83,9 @@ export default function App() {
         path="/*" 
         element={
           <ProtectedRoute>
-            <DashboardContent />
+            <ErrorBoundary>
+              <DashboardContent />
+            </ErrorBoundary>
           </ProtectedRoute>
         } 
       />

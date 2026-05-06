@@ -2,6 +2,15 @@ import React from 'react';
 import { supabase } from '../lib/supabase';
 import { logActivity } from '../db';
 
+import { Invoice, DocumentStatus } from '../types';
+import { formatCurrency } from '../lib/utils';
+import { DollarSign, Save } from 'lucide-react';
+
+interface ReceiptFormProps {
+  invoice: Invoice;
+  onSuccess: () => void;
+}
+
 export default function ReceiptForm({ invoice, onSuccess }: ReceiptFormProps) {
   const balance = invoice.grandTotal - (invoice.amountPaid || 0);
 
@@ -44,8 +53,7 @@ export default function ReceiptForm({ invoice, onSuccess }: ReceiptFormProps) {
       clientId: invoice.clientId,
       eventId: invoice.eventId,
       amount,
-      date,
-      createdAt: Date.now()
+      date
     });
 
     if (receiptError) {

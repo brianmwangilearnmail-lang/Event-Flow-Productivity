@@ -36,13 +36,13 @@ interface DashboardHomeProps {
 export default function DashboardHome({ onNavigate }: DashboardHomeProps) {
   const { user } = useAuth();
   
-  const { data: clients } = useSupabaseQuery<Client>('clients', (q) => q.select('*'));
-  const { data: events } = useSupabaseQuery<Event>('events', (q) => q.select('*').neq('status', 'Cancelled'));
-  const { data: quotations } = useSupabaseQuery<Quotation>('quotations', (q) => q.select('*'));
-  const { data: invoices } = useSupabaseQuery<Invoice>('invoices', (q) => q.select('*'));
-  const { data: payments } = useSupabaseQuery<Payment>('payments', (q) => q.select('*'));
-  const { data: settingsList } = useSupabaseQuery<BusinessSettings>('settings', (q) => q.select('*'));
-  const { data: recentActivity } = useSupabaseQuery<ActivityLog>('activity_logs', (q) => q.select('*').order('timestamp', { ascending: false }).limit(6));
+  const { data: clients = [] } = useSupabaseQuery<Client>('clients', (q) => q.select('*'));
+  const { data: events = [] } = useSupabaseQuery<Event>('events', (q) => q.select('*').neq('status', 'Cancelled'));
+  const { data: quotations = [] } = useSupabaseQuery<Quotation>('quotations', (q) => q.select('*'));
+  const { data: invoices = [] } = useSupabaseQuery<Invoice>('invoices', (q) => q.select('*'));
+  const { data: payments = [] } = useSupabaseQuery<Payment>('payments', (q) => q.select('*'));
+  const { data: settingsList = [] } = useSupabaseQuery<BusinessSettings>('settings', (q) => q.select('*'));
+  const { data: recentActivity = [] } = useSupabaseQuery<ActivityLog>('activity_logs', (q) => q.select('*').order('timestamp', { ascending: false }).limit(6));
 
   const clientCount = clients?.length || 0;
   const eventCount = events?.length || 0;

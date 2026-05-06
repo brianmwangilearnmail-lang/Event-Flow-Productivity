@@ -55,7 +55,6 @@ export default function ClientView({ onNavigate }: ClientViewProps) {
       notes: formData.get('notes') as string,
       tags: (formData.get('tags') as string).split(',').map(t => t.trim()).filter(t => t),
       status: ClientStatus.NEW_INQUIRY,
-      createdAt: Date.now(),
       assignedStaff: 'Admin User'
     };
 

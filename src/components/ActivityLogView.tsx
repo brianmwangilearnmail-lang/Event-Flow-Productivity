@@ -14,7 +14,8 @@ import {
   CheckCircle2,
   XCircle,
   AlertCircle,
-  Eye
+  Eye,
+  Package
 } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { cn } from '../lib/utils';
@@ -42,13 +43,13 @@ export default function ActivityLogView() {
     if (!log.linkedId || !log.linkedType) return;
     
     try {
-      let data = null;
       const tableMap: Record<string, string> = {
         'Quotation': 'quotations',
         'Invoice': 'invoices',
         'Receipt': 'receipts',
         'Client': 'clients',
-        'Event': 'events'
+        'Event': 'events',
+        'Catalog': 'catalog'
       };
 
       const tableName = tableMap[log.linkedType];
@@ -63,7 +64,7 @@ export default function ActivityLogView() {
         alert('Record no longer exists.');
       }
     } catch (error) {
-      console.error('Failed to fetch document:', error);
+      console.error('Failed to fetch record:', error);
     }
   };
 
@@ -94,7 +95,12 @@ export default function ActivityLogView() {
         if (!error) success = true;
       } else if (type === 'Receipt') {
         if (log.revertData && log.linkedId) {
-          await supabase.from('invoices').upsert({ ...log.revertData, id: log.revertData.id });
+          // Reverting a payment means restoring the invoice state and deleting payment/receipt
+          await supabase.from('invoices').update({ 
+            amountPaid: log.revertData.amountPaid, 
+            status: log.revertData.status 
+          }).eq('id', log.revertData.id);
+          
           const { data: receipt } = await supabase.from('receipts').select('id').eq('paymentId', log.linkedId).single();
           if (receipt) {
             await supabase.from('receipts').delete().eq('id', receipt.id);
@@ -212,11 +218,11 @@ export default function ActivityLogView() {
                   </td>
                   <td className="px-6 py-3 text-right whitespace-nowrap">
                     <div className="flex items-center justify-end gap-2">
-                      {log.linkedType && log.linkedType !== 'Catalog' && (log.linkedType as string) !== 'ActivityLog' && (
+                      {log.linkedType && (log.linkedType as string) !== 'ActivityLog' && (
                         <button 
                           onClick={() => handleView(log)}
                           className="flex items-center gap-1.5 px-3 py-1.5 bg-bg-base text-black/60 hover:bg-black hover:text-white transition-all rounded-lg text-[9px] font-black uppercase tracking-widest border border-black/5"
-                          title="View associated document"
+                          title="View associated record"
                         >
                           <Eye size={12} />
                           View
@@ -277,7 +283,7 @@ export default function ActivityLogView() {
                   </div>
                   
                   <div className="flex items-center gap-2">
-                    {log.linkedType && log.linkedType !== 'Catalog' && (log.linkedType as string) !== 'ActivityLog' && (
+                    {log.linkedType && (log.linkedType as string) !== 'ActivityLog' && (
                       <button 
                         onClick={() => handleView(log)}
                         className="flex items-center gap-1.5 px-3 py-1.5 bg-bg-base text-black/60 rounded-lg text-[9px] font-black uppercase tracking-widest border border-black/5"
@@ -321,13 +327,13 @@ export default function ActivityLogView() {
         isOpen={isViewModalOpen} 
         onClose={() => setIsViewModalOpen(false)} 
         title={`Preview: ${selectedDoc?.type}`}
-        size="full"
+        size="lg"
       >
         {selectedDoc && (
           selectedDoc.type === 'Client' ? (
             <div className="space-y-6 p-4">
               <h2 className="text-2xl font-black italic tracking-tighter text-black uppercase">{selectedDoc.data.fullName}</h2>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <p className="text-[10px] text-black/40 uppercase tracking-[0.2em] font-bold">Email</p>
                   <p className="text-sm font-bold">{selectedDoc.data.email}</p>
@@ -336,7 +342,36 @@ export default function ActivityLogView() {
                   <p className="text-[10px] text-black/40 uppercase tracking-[0.2em] font-bold">Phone</p>
                   <p className="text-sm font-bold">{selectedDoc.data.phone}</p>
                 </div>
+                <div className="md:col-span-2">
+                  <p className="text-[10px] text-black/40 uppercase tracking-[0.2em] font-bold">Address</p>
+                  <p className="text-sm font-bold">{selectedDoc.data.address || 'N/A'}</p>
+                </div>
               </div>
+            </div>
+          ) : selectedDoc.type === 'Event' ? (
+            <div className="space-y-6 p-4">
+              <h2 className="text-2xl font-black italic tracking-tighter text-black uppercase">{selectedDoc.data.title}</h2>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <p className="text-[10px] text-black/40 uppercase tracking-[0.2em] font-bold">Date</p>
+                  <p className="text-sm font-bold">{selectedDoc.data.date}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] text-black/40 uppercase tracking-[0.2em] font-bold">Status</p>
+                  <p className="text-sm font-bold">{selectedDoc.data.status}</p>
+                </div>
+              </div>
+            </div>
+          ) : selectedDoc.type === 'Catalog' ? (
+            <div className="space-y-6 p-4 text-center">
+              <div className="w-20 h-20 bg-bg-base rounded-full flex items-center justify-center mx-auto">
+                <Package size={40} className="text-black/10" />
+              </div>
+              <div>
+                <h2 className="text-2xl font-black italic tracking-tighter text-black uppercase">{selectedDoc.data.name}</h2>
+                <p className="text-[10px] text-black/40 uppercase tracking-[0.2em] font-bold mt-1">{selectedDoc.data.category}</p>
+              </div>
+              <p className="text-sm font-bold text-gold-deep">{selectedDoc.data.clientPrice} KES</p>
             </div>
           ) : (
             <DocumentGenerator 

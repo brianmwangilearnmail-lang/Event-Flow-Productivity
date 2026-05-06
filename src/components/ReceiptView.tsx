@@ -130,7 +130,7 @@ export default function ReceiptView({ onNavigate }: ReceiptViewProps) {
         
         {/* Mobile Card View */}
         <div className="md:hidden divide-y divide-gray-50">
-          {receipts.map((rcp: any) => (
+          {filteredReceipts.map((rcp: any) => (
             <div key={rcp.id} className="p-4 flex items-center justify-between group active:bg-gray-50 transition-colors" onClick={() => { setSelectedReceipt(rcp); setIsViewModalOpen(true); }}>
               <div className="flex items-center gap-3 min-w-0">
                 <div className="w-9 h-9 border border-black/5 bg-gray-50 flex items-center justify-center text-green-600 shrink-0">

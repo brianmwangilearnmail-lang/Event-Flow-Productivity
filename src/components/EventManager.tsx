@@ -40,7 +40,13 @@ export default function EventManager({ eventId, onBack }: EventManagerProps) {
   const handleToggleVerify = async (index: number) => {
     const newVerifiedItems = { ...verifiedItems, [index]: !verifiedItems[index] };
     setVerifiedItems(newVerifiedItems);
-    await supabase.from('events').update({ verifiedItems: newVerifiedItems }).eq('id', eventId);
+    const { error } = await supabase.from('events').update({ verifiedItems: newVerifiedItems }).eq('id', eventId);
+    if (error) {
+      console.error('Error updating verification:', error);
+      // Revert state on error
+      setVerifiedItems(verifiedItems);
+      alert('Failed to update item status. Please try again.');
+    }
   };
 
   const handleAddCustomItem = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -58,13 +64,26 @@ export default function EventManager({ eventId, onBack }: EventManagerProps) {
 
     const newAdditionalItems = [...additionalItems, newItem];
     setAdditionalItems(newAdditionalItems);
-    await supabase.from('events').update({ additionalItems: newAdditionalItems }).eq('id', eventId);
-    setIsAddItemModalOpen(false);
+    const { error } = await supabase.from('events').update({ additionalItems: newAdditionalItems }).eq('id', eventId);
+    
+    if (error) {
+      console.error('Error adding item:', error);
+      setAdditionalItems(additionalItems); // Revert
+      alert('Failed to add item to event. Please try again.');
+    } else {
+      setIsAddItemModalOpen(false);
+      await logActivity(event.clientId, 'Event Item Added', `Added ${newItem.name} to event`, eventId, 'Event');
+    }
   };
 
   const handleUpdateVerificationStatus = async (status: 'Verified' | 'Unverified') => {
     setClientVerification(status);
-    await supabase.from('events').update({ clientVerification: status }).eq('id', eventId);
+    const { error } = await supabase.from('events').update({ clientVerification: status }).eq('id', eventId);
+    if (error) {
+      console.error('Error updating verification status:', error);
+      setClientVerification(clientVerification); // Revert
+      alert('Failed to update verification status.');
+    }
   };
 
   const handleGenerateInvoice = async () => {

@@ -17,15 +17,28 @@ import { logActivity } from '../db';
 import { BusinessSettings } from '../types';
 import { cn, compressImage } from '../lib/utils';
 
+const FONTS = [
+  'Inter', 'Playfair Display', 'Roboto', 'Open Sans', 'Lato', 
+  'Montserrat', 'Oswald', 'Raleway', 'Merriweather', 'Nunito'
+];
+
 export default function SettingsView() {
   const { data: settingsList = [] } = useSupabaseQuery<BusinessSettings>('settings', (q) => q.select('*'));
   const settings = settingsList?.[0];
-  const [formData, setFormData] = useState<Partial<BusinessSettings>>({});
+  const [formData, setFormData] = useState<Partial<BusinessSettings>>({
+    brandColors: { primary: '#000000', secondary: '#ffffff', accent: '#B8860B' },
+    documentFont: 'Inter'
+  });
   const [isSaved, setIsSaved] = useState(false);
 
   useEffect(() => {
     if (settings) {
-      setFormData(settings);
+      setFormData(prev => ({
+        ...prev,
+        ...settings,
+        brandColors: settings.brandColors || prev.brandColors,
+        documentFont: settings.documentFont || prev.documentFont
+      }));
     }
   }, [settings]);
 
@@ -46,19 +59,26 @@ export default function SettingsView() {
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
+    let error;
     if (settings?.id) {
-      const { error } = await supabase.from('settings').update(formData).eq('id', settings.id);
-      if (error) {
-        alert('Error saving settings: ' + error.message);
-        return;
-      }
-      logActivity(undefined, 'Settings Updated', 'Business settings and branding were updated');
-      setIsSaved(true);
-      setTimeout(() => setIsSaved(false), 3000);
+      const res = await supabase.from('settings').update(formData).eq('id', settings.id);
+      error = res.error;
+    } else {
+      const res = await supabase.from('settings').insert([formData]);
+      error = res.error;
     }
+    
+    if (error) {
+      alert('Error saving settings: ' + error.message);
+      return;
+    }
+    logActivity(undefined, 'Settings Updated', 'Business settings and branding were updated');
+    setIsSaved(true);
+    setTimeout(() => setIsSaved(false), 3000);
   };
 
-  if (!formData.name) return null;
+  // Removed the line that returns null if !formData.name to prevent blank page
+
 
   return (
     <div className="max-w-2xl mx-auto space-y-6 pb-24 px-4">
@@ -168,6 +188,25 @@ export default function SettingsView() {
                 <p className="text-[8px] uppercase font-black text-black/30 tracking-tighter">{color.label}</p>
               </div>
             ))}
+          </div>
+
+          <div className="pt-4 border-t border-black/5 mt-4">
+            <div className="space-y-1">
+              <label className="text-[9px] uppercase font-bold tracking-widest text-black/30">Document Font</label>
+              <select 
+                name="documentFont"
+                value={formData.documentFont || 'Inter'}
+                onChange={handleInputChange}
+                className="w-full px-0 py-1 bg-transparent border-b border-black/5 outline-none focus:border-black text-xs font-bold appearance-none cursor-pointer"
+                style={{ fontFamily: formData.documentFont || 'Inter' }}
+              >
+                {FONTS.map(font => (
+                  <option key={font} value={font} style={{ fontFamily: font }}>
+                    {font}
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
         </section>
 

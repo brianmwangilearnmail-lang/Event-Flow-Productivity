@@ -59,7 +59,7 @@ export interface Client {
   tags: string[];
   notes: string;
   status: ClientStatus;
-  createdAt: number;
+  createdAt?: string;
   assignedStaff: string;
 }
 
@@ -142,7 +142,7 @@ export interface Quotation {
   version: number;
   revisionNotes?: string;
   preparedBy: string;
-  createdAt: number;
+  createdAt?: string;
 }
 
 export interface Invoice {
@@ -185,7 +185,7 @@ export interface Receipt {
   eventId: number;
   amount: number;
   date: string;
-  createdAt: number;
+  createdAt?: string;
 }
 
 export interface ActivityLog {
@@ -220,6 +220,7 @@ export interface BusinessSettings {
   currency: string;
   taxRate: number;
   adminName: string;
+  documentFont?: string;
 }
 
 export interface User {

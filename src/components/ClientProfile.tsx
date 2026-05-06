@@ -29,7 +29,7 @@ import { Client, ClientStatus, DocumentStatus } from '../types';
 import { cn, formatCurrency } from '../lib/utils';
 import Modal from './Modal';
 import ReceiptForm from './ReceiptForm';
-import { Invoice, Payment, Receipt as ReceiptRecord } from '../types';
+import { Invoice, Payment, Receipt as ReceiptRecord, Quotation, Event } from '../types';
 
 import InvoiceForm from './InvoiceForm';
 import DocumentGenerator from './DocumentGenerator';

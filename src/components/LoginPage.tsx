@@ -16,7 +16,7 @@ const LoginPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   
-  const { login } = useAuth();
+  useAuth(); // Ensures auth context is available
   const navigate = useNavigate();
   const location = useLocation();
   const from = location.state?.from?.pathname || "/";

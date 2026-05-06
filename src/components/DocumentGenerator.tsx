@@ -15,10 +15,19 @@ interface DocumentGeneratorProps {
 
 export default function DocumentGenerator({ type, data, onClose }: DocumentGeneratorProps) {
   const documentRef = useRef<HTMLDivElement>(null);
-  const { data: settingsList = [] } = useSupabaseQuery<BusinessSettings>('settings', (q) => q.select('*'), []);
-  const settings = settingsList[0];
+  const { data: settingsList = [], loading: loadingSettings } = useSupabaseQuery<BusinessSettings>('settings', (q) => q.select('*'), []);
+  const settings = settingsList[0] || {
+    name: 'EventFlow Business',
+    address: 'Business Address Not Set',
+    phone: 'Phone Not Set',
+    email: 'Email Not Set',
+    paymentInstructions: 'Please contact us for payment instructions.',
+    terms: 'Standard terms and conditions apply.',
+    footerText: 'Thank you for your business.',
+    documentFont: 'Inter, sans-serif'
+  };
 
-  const { data: clientList = [] } = useSupabaseQuery<any>('clients', (q) => q.select('*').eq('id', data.clientId), [data.clientId]);
+  const { data: clientList = [], loading: loadingClient } = useSupabaseQuery<any>('clients', (q) => q.select('*').eq('id', data.clientId), [data.clientId]);
   const client = clientList[0];
 
   const eventId = (data as any).eventId;
@@ -99,7 +108,23 @@ export default function DocumentGenerator({ type, data, onClose }: DocumentGener
     pdf.save(`${type}-${(data as any).number || (data as any).id}.pdf`);
   };
 
-  if (!settings || !client) return null;
+  if (loadingClient || loadingSettings) {
+    return (
+      <div className="flex flex-col items-center justify-center py-20 gap-4">
+        <div className="w-12 h-12 border-4 border-black/5 border-t-gold-deep rounded-full animate-spin"></div>
+        <p className="text-[10px] font-black uppercase tracking-[0.2em] text-black/40">Securing Ledger Data...</p>
+      </div>
+    );
+  }
+
+  if (!client) {
+    return (
+      <div className="p-10 text-center">
+        <p className="text-red-500 font-bold">Error: Client information not found.</p>
+        <button onClick={onClose} className="mt-4 px-4 py-2 bg-black text-white rounded-lg text-xs uppercase font-black">Close</button>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col gap-3 max-h-[92vh] md:max-h-[90vh]">

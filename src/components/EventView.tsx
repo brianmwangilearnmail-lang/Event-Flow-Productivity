@@ -35,7 +35,7 @@ export default function EventView({ onNavigate }: EventViewProps) {
   const [managingEventId, setManagingEventId] = useState<number | null>(null);
 
   const { data: clients = [] } = useSupabaseQuery<any>('clients', (q) => q.select('*'));
-  const { data: events = [] } = useSupabaseQuery<any>('events', (q) => {
+  const { data: events = [], optimisticInsert, optimisticUpdate, optimisticDelete } = useSupabaseQuery<any>('events', (q) => {
     let query = q.select('*, clients(fullName)').order('date', { ascending: false });
     if (searchTerm) {
       query = query.or(`title.ilike.%${searchTerm}%,clients.fullName.ilike.%${searchTerm}%`);
@@ -62,9 +62,11 @@ export default function EventView({ onNavigate }: EventViewProps) {
   const handleSaveEvent = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
+    const clientId = Number(formData.get('clientId'));
+    const clientName = clients.find((c: any) => c.id === clientId)?.fullName || '';
     
     const eventData: Omit<Event, 'id'> = {
-      clientId: Number(formData.get('clientId')),
+      clientId,
       title: formData.get('title') as string,
       type: formData.get('type') as string,
       date: formData.get('date') as string,
@@ -80,25 +82,30 @@ export default function EventView({ onNavigate }: EventViewProps) {
     };
 
     if (editingEvent?.id) {
+      // Optimistic update — close modal instantly
+      optimisticUpdate(ev => ev.id === editingEvent.id, { ...eventData, clients: { fullName: clientName } });
+      setIsModalOpen(false);
+      setEditingEvent(null);
       const { error } = await supabase.from('events').update(eventData).eq('id', editingEvent.id);
-      if (error) {
-        alert('Error updating event: ' + error.message);
-        return;
-      }
-      await logActivity(eventData.clientId, 'Event Updated', `Updated event: ${eventData.title}`, editingEvent.id, 'Event');
+      if (error) { alert('Error updating event: ' + error.message); return; }
+      logActivity(eventData.clientId, 'Event Updated', `Updated event: ${eventData.title}`, editingEvent.id, 'Event');
     } else {
+      const tempId = -Date.now();
+      // Optimistic insert — close modal instantly
+      optimisticInsert({ id: tempId, ...eventData, clients: { fullName: clientName } });
+      setIsModalOpen(false);
+      setEditingEvent(null);
       const { data, error } = await supabase.from('events').insert(eventData).select().single();
       if (error) {
+        optimisticDelete((ev: any) => ev.id === tempId);
         alert('Error creating event: ' + error.message);
         return;
       }
       if (data) {
-        await logActivity(eventData.clientId, 'Event Created', `Created event: ${eventData.title}`, data.id, 'Event');
+        optimisticUpdate((ev: any) => ev.id === tempId, data);
+        logActivity(eventData.clientId, 'Event Created', `Created event: ${eventData.title}`, data.id, 'Event');
       }
     }
-    
-    setIsModalOpen(false);
-    setEditingEvent(null);
   };
 
   const handleOpenAddModal = () => {
@@ -113,12 +120,14 @@ export default function EventView({ onNavigate }: EventViewProps) {
 
   const handleDeleteEvent = async (id: number, title: string, clientId: number) => {
     if (window.confirm(`Are you sure you want to delete the event: ${title}?`)) {
+      // Instant removal from UI
+      optimisticDelete((ev: any) => ev.id === id);
       const { error } = await supabase.from('events').delete().eq('id', id);
       if (error) {
         alert('Error deleting event: ' + error.message);
         return;
       }
-      await logActivity(clientId, 'Event Deleted', `Deleted event: ${title}`);
+      logActivity(clientId, 'Event Deleted', `Deleted event: ${title}`);
     }
   };
 

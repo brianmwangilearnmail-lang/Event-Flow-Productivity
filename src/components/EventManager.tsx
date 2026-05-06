@@ -94,9 +94,6 @@ export default function EventManager({ eventId, onBack }: EventManagerProps) {
 
     setIsGeneratingInvoice(true);
     
-    // Simulate generation delay for the animation
-    await new Promise(resolve => setTimeout(resolve, 800));
-
     const allItems = [...additionalItems];
     const subtotal = allItems.reduce((sum, item) => sum + (item.quantity * item.unitPrice) - item.discount, 0);
     const taxTotal = subtotal * 0.16; // Example 16% VAT, can be fetched from settings
@@ -121,11 +118,12 @@ export default function EventManager({ eventId, onBack }: EventManagerProps) {
     };
 
     const { error } = await supabase.from('invoices').insert(newInvoice);
+    setIsGeneratingInvoice(false);
     if (error) {
       alert('Error generating invoice: ' + error.message);
     } else {
-      await logActivity(event.clientId, 'Invoice Generated', `Created final invoice from Event Manager for additional items`, event.id, 'Event');
-      alert("Invoice generated safely! Please check your Invoices tab or Client Profile.");
+      logActivity(event.clientId, 'Invoice Generated', `Created final invoice from Event Manager for additional items`, event.id, 'Event');
+      alert("Invoice generated! Check your Invoices tab or Client Profile.");
     }
   };
 

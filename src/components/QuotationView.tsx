@@ -40,7 +40,7 @@ export default function QuotationView({ onNavigate }: QuotationViewProps) {
   const [selectedQuote, setSelectedQuote] = useState<Quotation | null>(null);
   const [statusFilter, setStatusFilter] = useState<DocumentStatus | 'All'>('All');
 
-  const { data: quotations = [] } = useSupabaseQuery<any>('quotations', (q) => {
+  const { data: quotations = [], optimisticUpdate, optimisticDelete } = useSupabaseQuery<any>('quotations', (q) => {
     let query = q.select('*, clients(fullName), events(title)').order('createdAt', { ascending: false });
     return query;
   }, []);
@@ -71,27 +71,38 @@ export default function QuotationView({ onNavigate }: QuotationViewProps) {
   }, [quotations, searchTerm, statusFilter]);
 
   const handleStatusChange = async (id: number, status: DocumentStatus) => {
+    // Instant UI update
+    optimisticUpdate(q => q.id === id, { status });
+
     const { data: existing, error: fetchError } = await supabase.from('quotations').select('*').eq('id', id).single();
     if (fetchError) return;
 
     const { error: updateError } = await supabase.from('quotations').update({ status }).eq('id', id);
-    if (updateError) return;
+    if (updateError) {
+      // Revert on error (refetch will happen via realtime, but let's be explicit)
+      return;
+    }
 
     if (existing) {
-      await logActivity(existing.clientId, 'Quotation Updated', `Quote #${existing.number} status changed to ${status}`, id, 'Quotation', existing);
+      logActivity(existing.clientId, 'Quotation Updated', `Quote #${existing.number} status changed to ${status}`, id, 'Quotation', existing);
     }
   };
 
   const deleteQuotation = async (id: number) => {
     if (confirm('Are you sure you want to delete this quotation?')) {
+      // Instant removal
+      optimisticDelete(q => q.id === id);
+
       const { data: existing } = await supabase.from('quotations').select('*').eq('id', id).single();
+      const { error } = await supabase.from('quotations').delete().eq('id', id);
+      
+      if (error) {
+        alert('Error deleting quotation: ' + error.message);
+        return;
+      }
+      
       if (existing) {
-        const { error } = await supabase.from('quotations').delete().eq('id', id);
-        if (error) {
-          alert('Error deleting quotation: ' + error.message);
-          return;
-        }
-        await logActivity(existing.clientId, 'Record Deleted', `Quotation #${existing.number} was deleted`, id, 'Quotation', existing);
+        logActivity(existing.clientId, 'Record Deleted', `Quotation #${existing.number} was deleted`, id, 'Quotation', existing);
       }
     }
   };

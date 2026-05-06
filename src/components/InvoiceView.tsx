@@ -43,7 +43,7 @@ export default function InvoiceView({ onNavigate }: InvoiceViewProps) {
   const [invoiceToDelete, setInvoiceToDelete] = useState<Invoice | null>(null);
   const [deleteReason, setDeleteReason] = useState("");
 
-  const { data: invoices = [] } = useSupabaseQuery<any>('invoices', (q) => {
+  const { data: invoices = [], optimisticUpdate, optimisticDelete } = useSupabaseQuery<any>('invoices', (q) => {
     let query = q.select('*, clients(fullName)').order('createdAt', { ascending: false });
     return query;
   }, []);
@@ -65,6 +65,9 @@ export default function InvoiceView({ onNavigate }: InvoiceViewProps) {
   const { data: clients = [] } = useSupabaseQuery<Client>('clients', (q) => q.select('*'));
 
   const handleStatusChange = async (invoice: any, status: DocumentStatus) => {
+    // Instant UI update
+    optimisticUpdate(i => i.id === invoice.id, { status });
+
     try {
       const { data: existing, error: fetchError } = await supabase.from('invoices').select('*').eq('id', invoice.id).single();
       if (fetchError) throw fetchError;
@@ -73,7 +76,7 @@ export default function InvoiceView({ onNavigate }: InvoiceViewProps) {
       if (updateError) throw updateError;
 
       if (existing) {
-        await logActivity(
+        logActivity(
           invoice.clientId,
           'Updated Invoice Status',
           `Invoice status updated to ${status}`,
@@ -99,24 +102,29 @@ export default function InvoiceView({ onNavigate }: InvoiceViewProps) {
       return;
     }
     
+    // Instant removal
+    const idToDelete = invoiceToDelete.id;
+    optimisticDelete(i => i.id === idToDelete);
+    const invoiceCopy = { ...invoiceToDelete };
+    setInvoiceToDelete(null);
+    setDeleteReason("");
+
     try {
-      const { data: existing } = await supabase.from('invoices').select('*').eq('id', invoiceToDelete.id).single();
+      const { data: existing } = await supabase.from('invoices').select('*').eq('id', idToDelete).single();
       if (existing) {
-        const { error } = await supabase.from('invoices').delete().eq('id', invoiceToDelete.id);
+        const { error } = await supabase.from('invoices').delete().eq('id', idToDelete);
         if (error) {
           alert('Error deleting invoice: ' + error.message);
           return;
         }
-        await logActivity(
-          invoiceToDelete.clientId,
+        logActivity(
+          invoiceCopy.clientId,
           'Record Deleted',
-          `Invoice #${invoiceToDelete.number} deleted. Reason: ${deleteReason}`,
-          invoiceToDelete.id,
+          `Invoice #${invoiceCopy.number} deleted. Reason: ${deleteReason}`,
+          idToDelete,
           'Invoice',
           existing
         );
-        setInvoiceToDelete(null);
-        setDeleteReason("");
       }
     } catch (error) {
       console.error("Error deleting invoice:", error);

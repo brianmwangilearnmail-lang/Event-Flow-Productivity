@@ -49,7 +49,7 @@ export default function CatalogView() {
     'Custom services'
   ];
 
-  const { data: allItems = [] } = useSupabaseQuery<CatalogItem>('catalog', (q) => {
+  const { data: allItems = [], optimisticInsert, optimisticUpdate, optimisticDelete } = useSupabaseQuery<CatalogItem>('catalog', (q) => {
     let query = q.select('*').eq('isArchived', false).order('name');
     if (selectedCategory !== 'All') {
       query = query.eq('category', selectedCategory);
@@ -84,24 +84,30 @@ export default function CatalogView() {
     };
 
     if (editingItem?.id) {
+      // Optimistic update — close modal instantly
+      optimisticUpdate(i => i.id === editingItem.id, itemData);
+      setIsAddModalOpen(false);
+      setEditingItem(null);
+      setImagePreview(null);
       const { error } = await supabase.from('catalog').update(itemData).eq('id', editingItem.id);
-      if (error) {
-        alert('Error updating item: ' + error.message);
-        return;
-      }
-      await logActivity(undefined, 'Catalog Updated', `Updated item: ${itemData.name}`);
+      if (error) { alert('Error updating item: ' + error.message); return; }
+      logActivity(undefined, 'Catalog Updated', `Updated item: ${itemData.name}`);
     } else {
-      const { error } = await supabase.from('catalog').insert(itemData);
+      const tempId = -Date.now();
+      // Optimistic insert — close modal instantly
+      optimisticInsert({ id: tempId, ...itemData });
+      setIsAddModalOpen(false);
+      setEditingItem(null);
+      setImagePreview(null);
+      const { data, error } = await supabase.from('catalog').insert(itemData).select().single();
       if (error) {
+        optimisticDelete(i => i.id === tempId);
         alert('Error adding item: ' + error.message);
         return;
       }
-      await logActivity(undefined, 'Catalog Updated', `Added item: ${itemData.name}`);
+      if (data) optimisticUpdate(i => i.id === tempId, data);
+      logActivity(undefined, 'Catalog Updated', `Added item: ${itemData.name}`);
     }
-
-    setIsAddModalOpen(false);
-    setEditingItem(null);
-    setImagePreview(null);
   };
 
   const handleImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -124,12 +130,14 @@ export default function CatalogView() {
 
   const handleDeleteItem = async (id: number, name: string) => {
     if (window.confirm(`Are you sure you want to archive ${name}?`)) {
+      // Instant removal from UI
+      optimisticDelete(i => i.id === id);
       const { error } = await supabase.from('catalog').update({ isArchived: true }).eq('id', id);
       if (error) {
         alert('Error archiving item: ' + error.message);
         return;
       }
-      await logActivity(undefined, 'Catalog Updated', `Archived item: ${name}`);
+      logActivity(undefined, 'Catalog Updated', `Archived item: ${name}`);
     }
   };
 

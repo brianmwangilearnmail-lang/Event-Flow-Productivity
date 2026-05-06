@@ -33,7 +33,7 @@ export default function ClientView({ onNavigate }: ClientViewProps) {
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
 
-  const { data: clients = [] } = useSupabaseQuery<Client>('clients', (q) => {
+  const { data: clients = [], optimisticInsert, optimisticDelete, optimisticUpdate } = useSupabaseQuery<Client>('clients', (q) => {
     let query = q.select('*').order('createdAt', { ascending: false });
     if (searchTerm) {
       query = query.or(`fullName.ilike.%${searchTerm}%,email.ilike.%${searchTerm}%,companyName.ilike.%${searchTerm}%`);
@@ -44,7 +44,9 @@ export default function ClientView({ onNavigate }: ClientViewProps) {
   const handleAddClient = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
-    const newClient: Omit<Client, 'id'> = {
+    const tempId = -Date.now();
+    const newClient: Client = {
+      id: tempId,
       fullName: formData.get('fullName') as string,
       companyName: formData.get('companyName') as string,
       email: formData.get('email') as string,
@@ -58,28 +60,37 @@ export default function ClientView({ onNavigate }: ClientViewProps) {
       assignedStaff: 'Admin User'
     };
 
+    // Instant UI update — close modal and show client immediately
+    optimisticInsert(newClient);
+    setIsAddModalOpen(false);
+
+    // Background sync
     const { data, error } = await supabase.from('clients').insert(newClient).select().single();
     if (error) {
+      optimisticDelete(c => c.id === tempId); // revert
       alert('Error creating client: ' + error.message);
       return;
     }
-    
+    // Replace temp item with real server record
     if (data) {
-      await logActivity(data.id, 'Client Created', `New client added: ${newClient.fullName}`, data.id, 'Client');
+      optimisticUpdate(c => c.id === tempId, data);
+      logActivity(data.id, 'Client Created', `New client added: ${newClient.fullName}`, data.id, 'Client');
     }
-    setIsAddModalOpen(false);
   };
 
   const deleteClient = async (id: number) => {
     if (confirm('Are you sure you want to delete this client? All events and documents will remain but unlinked.')) {
+      // Instant removal from UI
+      optimisticDelete(c => c.id === id);
       const { data: clientToDelete } = await supabase.from('clients').select('*').eq('id', id).single();
+      const { error } = await supabase.from('clients').delete().eq('id', id);
+      if (error) {
+        // Restore on failure — refetch will correct the list
+        alert('Error deleting client: ' + error.message);
+        return;
+      }
       if (clientToDelete) {
-        const { error } = await supabase.from('clients').delete().eq('id', id);
-        if (error) {
-          alert('Error deleting client: ' + error.message);
-          return;
-        }
-        await logActivity(id, 'Record Deleted', `Client ${clientToDelete.fullName} was deleted`, id, 'Client', clientToDelete);
+        logActivity(id, 'Record Deleted', `Client ${clientToDelete.fullName} was deleted`, id, 'Client', clientToDelete);
       }
     }
   };

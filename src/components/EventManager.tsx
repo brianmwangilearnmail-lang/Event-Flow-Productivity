@@ -305,7 +305,7 @@ export default function EventManager({ eventId, onBack }: EventManagerProps) {
           <div className="flex items-center justify-between">
             <h2 className="text-base md:text-lg font-bold flex items-center gap-2">
               <Truck size={18} className="text-black" />
-              Transport Team
+              Transport
             </h2>
             <button 
               onClick={() => setIsAddAssignmentModalOpen({ type: 'Transport' })}
@@ -342,7 +342,7 @@ export default function EventManager({ eventId, onBack }: EventManagerProps) {
           <div className="flex items-center justify-between">
             <h2 className="text-base md:text-lg font-bold flex items-center gap-2">
               <Users size={18} className="text-black" />
-              Labour & Crew
+              Labour
             </h2>
             <button 
               onClick={() => setIsAddAssignmentModalOpen({ type: 'Labour' })}

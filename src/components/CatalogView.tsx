@@ -44,8 +44,8 @@ export default function CatalogView() {
     'Backdrops',
     'Catering',
     'Drinks service',
-    'Transport and logistics',
-    'Staffing',
+    'Transport',
+    'Labour',
     'Custom services'
   ];
 

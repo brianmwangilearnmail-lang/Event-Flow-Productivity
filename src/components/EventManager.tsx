@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { ArrowLeft, CheckCircle, Circle, Plus, FileText, Check, Save, Loader2 } from 'lucide-react';
+import { ArrowLeft, CheckCircle, Circle, Plus, FileText, Check, Save, Loader2, Truck, Users, Trash2 } from 'lucide-react';
 import { useSupabaseQuery } from '../hooks/useSupabaseQuery';
 import { supabase } from '../lib/supabase';
 import { logActivity } from '../db';
-import { Event, Quotation, Invoice, QuotationLineItem, DocumentStatus } from '../types';
+import { Event, Quotation, Invoice, QuotationLineItem, DocumentStatus, StaffAssignment } from '../types';
 import { cn, formatCurrency } from '../lib/utils';
 import Modal from './Modal';
 
@@ -26,12 +26,17 @@ export default function EventManager({ eventId, onBack }: EventManagerProps) {
   const [clientVerification, setClientVerification] = useState<'Verified' | 'Unverified'>('Unverified');
 
   const [isGeneratingInvoice, setIsGeneratingInvoice] = useState(false);
+  const [transportAssignments, setTransportAssignments] = useState<StaffAssignment[]>([]);
+  const [labourAssignments, setLabourAssignments] = useState<StaffAssignment[]>([]);
+  const [isAddAssignmentModalOpen, setIsAddAssignmentModalOpen] = useState<{ type: 'Transport' | 'Labour' } | null>(null);
 
   useEffect(() => {
     if (event) {
       setVerifiedItems(event.verifiedItems || {});
       setAdditionalItems(event.additionalItems || []);
       setClientVerification(event.clientVerification || 'Unverified');
+      setTransportAssignments(event.transportAssignments || []);
+      setLabourAssignments(event.labourAssignments || []);
     }
   }, [event]);
 
@@ -125,6 +130,48 @@ export default function EventManager({ eventId, onBack }: EventManagerProps) {
       logActivity(event.clientId, 'Invoice Generated', `Created final invoice from Event Manager for additional items`, event.id, 'Event');
       alert("Invoice generated! Check your Invoices tab or Client Profile.");
     }
+  };
+
+  const handleAddAssignment = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (!isAddAssignmentModalOpen) return;
+
+    const formData = new FormData(e.currentTarget);
+    const newAssignment: StaffAssignment = {
+      name: formData.get('name') as string,
+      responsibility: formData.get('responsibility') as string
+    };
+
+    const isTransport = isAddAssignmentModalOpen.type === 'Transport';
+    const current = isTransport ? transportAssignments : labourAssignments;
+    const updated = [...current, newAssignment];
+
+    if (isTransport) setTransportAssignments(updated);
+    else setLabourAssignments(updated);
+
+    const updateField = isTransport ? 'transportAssignments' : 'labourAssignments';
+    const { error } = await supabase.from('events').update({ [updateField]: updated }).eq('id', eventId);
+    
+    if (error) {
+      alert('Error updating assignments: ' + error.message);
+      if (isTransport) setTransportAssignments(current);
+      else setLabourAssignments(current);
+    } else {
+      setIsAddAssignmentModalOpen(null);
+      logActivity(event.clientId, 'Assignment Updated', `Added ${newAssignment.name} to ${isAddAssignmentModalOpen.type}`, eventId, 'Event');
+    }
+  };
+
+  const removeAssignment = async (type: 'Transport' | 'Labour', index: number) => {
+    const isTransport = type === 'Transport';
+    const current = isTransport ? transportAssignments : labourAssignments;
+    const updated = current.filter((_, i) => i !== index);
+
+    if (isTransport) setTransportAssignments(updated);
+    else setLabourAssignments(updated);
+
+    const updateField = isTransport ? 'transportAssignments' : 'labourAssignments';
+    await supabase.from('events').update({ [updateField]: updated }).eq('id', eventId);
   };
 
   return (
@@ -253,7 +300,101 @@ export default function EventManager({ eventId, onBack }: EventManagerProps) {
           </div>
         </div>
 
+        {/* Transport Assignments */}
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <h2 className="text-base md:text-lg font-bold flex items-center gap-2">
+              <Truck size={18} className="text-black" />
+              Transport Team
+            </h2>
+            <button 
+              onClick={() => setIsAddAssignmentModalOpen({ type: 'Transport' })}
+              className="px-3 py-1.5 bg-black text-white text-[10px] md:text-xs font-bold uppercase tracking-widest hover:bg-black/80 transition-all flex items-center gap-1.5 rounded-md"
+            >
+              <Plus size={12} /> Assign
+            </button>
+          </div>
+
+          <div className="space-y-2">
+            {transportAssignments.length > 0 ? transportAssignments.map((a, i) => (
+              <div key={i} className="p-3 bg-white border border-black/5 flex justify-between items-center group rounded-xl">
+                <div>
+                  <p className="font-bold text-xs md:text-sm">{a.name}</p>
+                  <p className="text-[10px] text-black/40 uppercase tracking-widest font-bold mt-0.5">{a.responsibility}</p>
+                </div>
+                <button 
+                  onClick={() => removeAssignment('Transport', i)}
+                  className="p-2 text-black/10 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all"
+                >
+                  <Trash2 size={14} />
+                </button>
+              </div>
+            )) : (
+              <div className="p-6 bg-white border border-dashed border-gray-200 text-center text-xs text-gray-400 font-medium rounded-xl italic">
+                No transport assigned
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Labour Assignments */}
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <h2 className="text-base md:text-lg font-bold flex items-center gap-2">
+              <Users size={18} className="text-black" />
+              Labour & Crew
+            </h2>
+            <button 
+              onClick={() => setIsAddAssignmentModalOpen({ type: 'Labour' })}
+              className="px-3 py-1.5 bg-black text-white text-[10px] md:text-xs font-bold uppercase tracking-widest hover:bg-black/80 transition-all flex items-center gap-1.5 rounded-md"
+            >
+              <Plus size={12} /> Assign
+            </button>
+          </div>
+
+          <div className="space-y-2">
+            {labourAssignments.length > 0 ? labourAssignments.map((a, i) => (
+              <div key={i} className="p-3 bg-white border border-black/5 flex justify-between items-center group rounded-xl">
+                <div>
+                  <p className="font-bold text-xs md:text-sm">{a.name}</p>
+                  <p className="text-[10px] text-black/40 uppercase tracking-widest font-bold mt-0.5">{a.responsibility}</p>
+                </div>
+                <button 
+                  onClick={() => removeAssignment('Labour', i)}
+                  className="p-2 text-black/10 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all"
+                >
+                  <Trash2 size={14} />
+                </button>
+              </div>
+            )) : (
+              <div className="p-6 bg-white border border-dashed border-gray-200 text-center text-xs text-gray-400 font-medium rounded-xl italic">
+                No labour assigned
+              </div>
+            )}
+          </div>
+        </div>
+
       </div>
+
+      <Modal 
+        isOpen={!!isAddAssignmentModalOpen} 
+        onClose={() => setIsAddAssignmentModalOpen(null)} 
+        title={`Assign ${isAddAssignmentModalOpen?.type} Staff`}
+      >
+        <form onSubmit={handleAddAssignment} className="space-y-6">
+          <div className="space-y-2">
+            <label className="text-xs font-bold uppercase tracking-wider text-gray-400">Personnel Name *</label>
+            <input required name="name" type="text" className="w-full px-4 py-3 bg-gray-50 border-none rounded-xl outline-none focus:ring-2 focus:ring-gold-deep" placeholder="e.g. John Doe" />
+          </div>
+          <div className="space-y-2">
+            <label className="text-xs font-bold uppercase tracking-wider text-gray-400">Responsibility / Role *</label>
+            <input required name="responsibility" type="text" className="w-full px-4 py-3 bg-gray-50 border-none rounded-xl outline-none focus:ring-2 focus:ring-gold-deep" placeholder="e.g. Lead Driver, Heavy Lifting" />
+          </div>
+          <button type="submit" className="w-full py-4 bg-black text-white font-bold uppercase tracking-widest text-sm hover:bg-black/90 transition-colors rounded-xl">
+            Confirm Assignment
+          </button>
+        </form>
+      </Modal>
 
       <Modal isOpen={isAddItemModalOpen} onClose={() => setIsAddItemModalOpen(false)} title="Add Additional Item">
         <form onSubmit={handleAddCustomItem} className="space-y-6">

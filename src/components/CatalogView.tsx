@@ -380,15 +380,27 @@ export default function CatalogView() {
               <p className="text-sm text-gray-600 mt-1 leading-relaxed">{viewingItem.description || 'No description provided.'}</p>
             </div>
 
-            <button 
-              onClick={() => {
-                openEditModal(viewingItem);
-                setViewingItem(null);
-              }}
-              className="w-full py-3 bg-black text-white font-bold uppercase tracking-widest text-xs hover:bg-gray-800 transition-all rounded-xl"
-            >
-              Edit Item
-            </button>
+            <div className="flex gap-3">
+              <button 
+                onClick={() => {
+                  openEditModal(viewingItem);
+                  setViewingItem(null);
+                }}
+                className="flex-1 py-3 bg-black text-white font-bold uppercase tracking-widest text-xs hover:bg-gray-800 transition-all rounded-xl"
+              >
+                Edit Item
+              </button>
+              <button 
+                onClick={() => {
+                  handleDeleteItem(viewingItem.id!, viewingItem.name);
+                  setViewingItem(null);
+                }}
+                className="px-4 py-3 border border-red-100 text-red-500 hover:bg-red-50 transition-all rounded-xl"
+                title="Delete Item"
+              >
+                <Trash2 size={18} />
+              </button>
+            </div>
           </div>
         )}
       </Modal>

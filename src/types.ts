@@ -63,6 +63,11 @@ export interface Client {
   assignedStaff: string;
 }
 
+export interface StaffAssignment {
+  name: string;
+  responsibility: string;
+}
+
 export interface Event {
   id?: number;
   clientId: number;
@@ -91,6 +96,8 @@ export interface Event {
     logistics?: string;
     special?: string;
   };
+  transportAssignments?: StaffAssignment[];
+  labourAssignments?: StaffAssignment[];
 }
 
 export interface CatalogItem {

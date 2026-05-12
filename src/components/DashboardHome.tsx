@@ -125,7 +125,8 @@ export default function DashboardHome({ onNavigate }: DashboardHomeProps) {
         <div className="flex items-center gap-2 w-full sm:w-auto">
           <button 
             onClick={() => onNavigate('clients')}
-            className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-3 py-2.5 bg-black text-white rounded-lg hover:bg-gray-800 transition-all font-medium text-[10px] md:text-sm"
+            style={{ backgroundColor: settings?.brandColors?.primary || '#000000' }}
+            className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-3 py-2.5 text-white rounded-lg hover:opacity-90 transition-all font-medium text-[10px] md:text-sm"
           >
             <Plus size={14} />
             Client
@@ -147,7 +148,10 @@ export default function DashboardHome({ onNavigate }: DashboardHomeProps) {
             onClick={() => onNavigate(stat.target)}
             className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm hover:shadow-md transition-all group text-left w-full flex items-center gap-3"
           >
-            <div className={cn("p-2.5 rounded-lg text-white shrink-0", stat.color === 'bg-gold-500' ? 'bg-[#D4AF37]' : stat.color)}>
+            <div 
+              className={cn("p-2.5 rounded-lg text-white shrink-0")}
+              style={{ backgroundColor: stat.color === 'bg-gold-500' ? (settings?.brandColors?.secondary || '#D4AF37') : stat.color.replace('bg-', '') }}
+            >
               <stat.icon size={16} />
             </div>
             <div className="flex-1 min-w-0">
@@ -205,7 +209,7 @@ export default function DashboardHome({ onNavigate }: DashboardHomeProps) {
                   cursor={{ fill: '#F5F5F5', opacity: 0.4 }}
                   contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 30px rgba(0,0,0,0.05)', fontSize: '10px' }}
                 />
-                <Bar dataKey="revenue" fill="#D4AF37" radius={[4, 4, 0, 0]} barSize={24} />
+                <Bar dataKey="revenue" fill={settings?.brandColors?.secondary || "#D4AF37"} radius={[4, 4, 0, 0]} barSize={24} />
               </BarChart>
             </ResponsiveContainer>
           </div>

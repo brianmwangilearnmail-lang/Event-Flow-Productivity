@@ -10,9 +10,10 @@ import Modal from './Modal';
 interface InvoiceFormProps {
   client: Client;
   onSuccess: () => void;
+  optimisticInsert?: (item: any) => void;
 }
 
-export default function InvoiceForm({ client, onSuccess }: InvoiceFormProps) {
+export default function InvoiceForm({ client, onSuccess, optimisticInsert }: InvoiceFormProps) {
   const [selectedEventId, setSelectedEventId] = useState<number | null>(null);
   const [lineItems, setLineItems] = useState<QuotationLineItem[]>([]);
   const [dueDate, setDueDate] = useState('');
@@ -35,7 +36,7 @@ export default function InvoiceForm({ client, onSuccess }: InvoiceFormProps) {
   , []);
   
   const { data: quotations = [] } = useSupabaseQuery<Quotation>('quotations', (q) => 
-    q.select('*').eq('clientId', client.id).order('createdAt', { ascending: false })
+    q.select('*').eq('clientId', client.id).order('id', { ascending: false })
   , [client.id]);
 
   const totals = useMemo(() => {
@@ -104,6 +105,12 @@ export default function InvoiceForm({ client, onSuccess }: InvoiceFormProps) {
       grandTotal: totals.grandTotal,
       notes
     };
+
+    // Optimistic Update
+    if (optimisticInsert) {
+      optimisticInsert({ id: -Date.now(), ...invoiceData });
+    }
+    onSuccess();
 
     const { data: result, error } = await supabase.from('invoices').insert(invoiceData).select();
     if (error) {
@@ -273,7 +280,7 @@ export default function InvoiceForm({ client, onSuccess }: InvoiceFormProps) {
       {/* Quotation Picker Modal */}
       <Modal isOpen={isQuotationPickerOpen} onClose={() => setIsQuotationPickerOpen(false)} title="Select Quotation Items">
         <div className="grid grid-cols-1 gap-3 max-h-[60vh] overflow-y-auto pr-2">
-          {quotations.filter(q => [DocumentStatus.SENT, DocumentStatus.RECEIVED, DocumentStatus.APPROVED].includes(q.status)).map(q => (
+          {quotations.filter(q => [DocumentStatus.SENT, DocumentStatus.RECEIVED, DocumentStatus.APPROVED, DocumentStatus.CREATED, DocumentStatus.DRAFT].includes(q.status)).map(q => (
             <button 
               key={q.id} 
               onClick={() => handleAddItemsFromQuotation(q)}

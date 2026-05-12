@@ -191,18 +191,18 @@ export default function DocumentGenerator({ type, data, onClose }: DocumentGener
               {settings.logoUrl ? (
                 <img src={settings.logoUrl} alt="Company Logo" className="h-7 sm:h-14 object-contain grayscale" />
               ) : (
-                <div className="text-lg sm:text-3xl font-serif font-black tracking-tighter text-gold-deep italic">{settings.name || 'EventFlow'}</div>
+                <div className="text-lg sm:text-3xl font-serif font-black tracking-tighter italic" style={{ color: settings.brandColors?.secondary || '#B8860B' }}>{settings.name || 'EventFlow'}</div>
               )}
               <div className="text-[8px] sm:text-[10px] uppercase font-bold tracking-[0.2em] text-black/40 leading-relaxed max-w-[240px]">
-                <p className="border-l border-gold-deep pl-3">{settings.address}</p>
-                <p className="border-l border-gold-deep pl-3 mt-1.5">{settings.phone} • {settings.email}</p>
+                <p className="border-l pl-3" style={{ borderColor: settings.brandColors?.secondary || '#B8860B' }}>{settings.address}</p>
+                <p className="border-l pl-3 mt-1.5" style={{ borderColor: settings.brandColors?.secondary || '#B8860B' }}>{settings.phone} • {settings.email}</p>
               </div>
             </div>
             <div className="text-left sm:text-right uppercase">
               <h1 className="text-2xl sm:text-5xl font-serif font-black tracking-tighter text-black/80 italic">{type}</h1>
               <div className="mt-2 sm:mt-5 space-y-1.5">
                 <div className="flex flex-col sm:items-end">
-                  <span className="text-[7px] sm:text-[9px] font-black text-gold-deep tracking-[0.3em]">Serial Number</span>
+                  <span className="text-[7px] sm:text-[9px] font-black tracking-[0.3em]" style={{ color: settings.brandColors?.secondary || '#B8860B' }}>Serial Number</span>
                   <span className="text-[9px] sm:text-xs font-bold tracking-tight">{(data as any).number}</span>
                 </div>
                 <div className="flex flex-col sm:items-end mt-1">
@@ -216,7 +216,7 @@ export default function DocumentGenerator({ type, data, onClose }: DocumentGener
           {/* Client & Event Info */}
           <div className="grid grid-cols-2 gap-5 sm:gap-12 py-5 sm:py-10">
             <div className="space-y-2 sm:space-y-4">
-              <h4 className="text-[7px] sm:text-[9px] font-black uppercase tracking-[0.3em] text-gold-deep border-b border-black/5 pb-1.5">Target</h4>
+              <h4 className="text-[7px] sm:text-[9px] font-black uppercase tracking-[0.3em] border-b border-black/5 pb-1.5" style={{ color: settings.brandColors?.secondary || '#B8860B' }}>Target</h4>
               <div className="space-y-0.5">
                 <p className="font-serif text-sm sm:text-xl italic text-black font-black leading-tight">{client.fullName}</p>
                 {client.companyName && <p className="text-[7px] sm:text-[9px] text-black/40 font-bold uppercase tracking-widest">{client.companyName}</p>}
@@ -224,7 +224,7 @@ export default function DocumentGenerator({ type, data, onClose }: DocumentGener
             </div>
             {event && (
               <div className="space-y-2 sm:space-y-4">
-                <h4 className="text-[7px] sm:text-[9px] font-black uppercase tracking-[0.3em] text-gold-deep border-b border-black/5 pb-1.5">Scope</h4>
+                <h4 className="text-[7px] sm:text-[9px] font-black uppercase tracking-[0.3em] border-b border-black/5 pb-1.5" style={{ color: settings.brandColors?.secondary || '#B8860B' }}>Scope</h4>
                 <div className="space-y-0.5">
                   <p className="font-serif text-sm sm:text-xl italic text-black font-black leading-tight">{event.title}</p>
                   <p className="text-[7px] sm:text-[9px] text-black/40 font-bold uppercase tracking-widest">{event.type} • {event.date}</p>
@@ -294,7 +294,7 @@ export default function DocumentGenerator({ type, data, onClose }: DocumentGener
                 <span className="text-[8px] sm:text-[10px] font-black uppercase tracking-[0.4em] text-black">
                   {type === 'Receipt' ? 'Amount Received' : 'Total'}
                 </span>
-                <span className="text-xl sm:text-4xl font-black tracking-tighter text-gold-deep leading-none">
+                <span className="text-xl sm:text-4xl font-black tracking-tighter leading-none" style={{ color: settings.brandColors?.secondary || '#B8860B' }}>
                   {formatCurrency((data as any).grandTotal || (data as any).amount || 0)}
                 </span>
               </div>
@@ -305,20 +305,33 @@ export default function DocumentGenerator({ type, data, onClose }: DocumentGener
           <div className="mt-10 sm:mt-20 pt-5 sm:pt-10 border-t border-black/5">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 sm:gap-12">
               <div className="space-y-3 sm:space-y-5">
-                <h4 className="text-[8px] font-black uppercase tracking-[0.4em] text-gold-deep italic">Settlement Policy & Bank Details</h4>
-                <p className="text-[9px] text-black/40 leading-loose font-bold whitespace-pre-wrap">
-                  {settings.paymentInstructions}
-                </p>
+                <h4 className="text-[8px] font-black uppercase tracking-[0.4em] italic" style={{ color: settings.brandColors?.secondary || '#B8860B' }}>Settlement Policy & Bank Details</h4>
+                <div className="space-y-3">
+                  <p className="text-[9px] text-black/40 leading-loose font-bold whitespace-pre-wrap">
+                    {settings.paymentInstructions}
+                  </p>
+                  {(settings.bankName || settings.accountNumber) && (
+                    <div className="p-4 border-l-2 space-y-1 mt-2" style={{ backgroundColor: `${settings.brandColors?.accent || '#fdfbf7'}80`, borderColor: `${settings.brandColors?.secondary || '#B8860B'}33` }}>
+                      <p className="text-[7px] uppercase font-black tracking-widest text-black/20">Official Bank Account</p>
+                      <div className="grid grid-cols-1 gap-1">
+                        {settings.bankName && <p className="text-[9px] font-black text-black/60 uppercase tracking-tight">{settings.bankName}</p>}
+                        {settings.accountName && <p className="text-[9px] font-bold text-black/40">Name: {settings.accountName}</p>}
+                        {settings.accountNumber && <p className="text-[9px] font-bold text-black/40">Acc: {settings.accountNumber}</p>}
+                        {settings.swiftCode && <p className="text-[9px] font-bold text-black/40">SWIFT: {settings.swiftCode}</p>}
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
               <div className="space-y-3 sm:space-y-5">
-                <h4 className="text-[8px] font-black uppercase tracking-[0.4em] text-gold-deep italic">Legal & Engagement Clauses</h4>
+                <h4 className="text-[8px] font-black uppercase tracking-[0.4em] italic" style={{ color: settings.brandColors?.secondary || '#B8860B' }}>Legal & Engagement Clauses</h4>
                 <p className="text-[9px] text-black/40 leading-loose font-medium whitespace-pre-wrap">
                   {settings.terms}
                 </p>
               </div>
             </div>
             <div className="mt-10 sm:mt-16 text-center">
-              <div className="w-12 h-0.5 bg-gold-deep/20 mx-auto mb-4"></div>
+              <div className="w-12 h-0.5 mx-auto mb-4" style={{ backgroundColor: `${settings.brandColors?.secondary || '#B8860B'}33` }}></div>
               <p className="text-[8px] uppercase font-black tracking-[0.5em] text-black/20 italic">
                 {settings.footerText || `Thank you for your valued patronage • ${settings.name}`}
               </p>

@@ -210,6 +210,53 @@ export default function SettingsView() {
           </div>
         </section>
 
+        {/* Banking Details */}
+        <section className="bg-white p-6 rounded-2xl border border-black/5 shadow-sm space-y-6">
+          <h3 className="text-[9px] font-black uppercase tracking-widest text-gold-deep border-b border-gold-deep/10 pb-2">Banking Details</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-1">
+              <label className="text-[9px] uppercase font-bold tracking-widest text-black/30">Bank Name</label>
+              <input 
+                name="bankName"
+                value={formData.bankName || ''}
+                onChange={handleInputChange}
+                className="w-full px-0 py-1 bg-transparent border-b border-black/5 outline-none focus:border-black text-xs font-bold"
+                placeholder="e.g. Stanbic Bank"
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-[9px] uppercase font-bold tracking-widest text-black/30">Account Name</label>
+              <input 
+                name="accountName"
+                value={formData.accountName || ''}
+                onChange={handleInputChange}
+                className="w-full px-0 py-1 bg-transparent border-b border-black/5 outline-none focus:border-black text-xs font-bold"
+                placeholder="e.g. Event Flow Ltd"
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-[9px] uppercase font-bold tracking-widest text-black/30">Account Number</label>
+              <input 
+                name="accountNumber"
+                value={formData.accountNumber || ''}
+                onChange={handleInputChange}
+                className="w-full px-0 py-1 bg-transparent border-b border-black/5 outline-none focus:border-black text-xs font-bold"
+                placeholder="0000 0000 0000"
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-[9px] uppercase font-bold tracking-widest text-black/30">SWIFT / BIC Code</label>
+              <input 
+                name="swiftCode"
+                value={formData.swiftCode || ''}
+                onChange={handleInputChange}
+                className="w-full px-0 py-1 bg-transparent border-b border-black/5 outline-none focus:border-black text-xs font-bold"
+                placeholder="SBICKA"
+              />
+            </div>
+          </div>
+        </section>
+
         <button 
           type="submit"
           className="w-full py-4 bg-black text-white font-black uppercase tracking-[0.2em] text-[10px] rounded-xl shadow-lg active:scale-[0.98] transition-all flex items-center justify-center gap-2"

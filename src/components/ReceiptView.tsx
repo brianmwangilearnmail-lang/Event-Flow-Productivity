@@ -25,9 +25,13 @@ export default function ReceiptView({ onNavigate }: ReceiptViewProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [isViewModalOpen, setIsViewModalOpen] = useState(false);
   const [selectedReceipt, setSelectedReceipt] = useState<any | null>(null);
+  const [isFormOpen, setIsFormOpen] = useState(false);
+
+  const { data: settingsList = [] } = useSupabaseQuery<any>('settings', (q) => q.select('*'));
+  const settings = settingsList?.[0];
 
   const { data: allReceipts = [] } = useSupabaseQuery<any>('receipts', (q) => 
-    q.select('*, clients(fullName), events(title)').order('createdAt', { ascending: false })
+    q.select('*, clients(fullName), events(title)').order('id', { ascending: false })
   , []);
 
   const filteredReceipts = React.useMemo(() => {
@@ -51,6 +55,16 @@ export default function ReceiptView({ onNavigate }: ReceiptViewProps) {
               className="md:hidden p-2 hover:bg-white text-gray-400 hover:text-black transition-all border border-black/5 shrink-0 rounded-lg"
             >
               <ArrowLeft size={16} />
+            </button>
+          )}
+          {onNavigate && (
+            <button 
+              onClick={() => setIsFormOpen(true)}
+              style={{ backgroundColor: settings?.brandColors?.primary || '#000000' }}
+              className="hidden md:flex items-center justify-center gap-2 px-6 py-3 text-white rounded-xl font-bold text-xs"
+            >
+              <Plus size={16} />
+              New Receipt
             </button>
           )}
           <div>
@@ -92,8 +106,14 @@ export default function ReceiptView({ onNavigate }: ReceiptViewProps) {
                 <tr key={rcp.id} className="hover:bg-bg-base/30 transition-colors group">
                   <td className="px-8 py-6">
                     <div className="flex items-center gap-4">
-                      <div className="w-9 h-9 border border-black/5 bg-white flex items-center justify-center text-green-600">
-                        <ReceiptIcon size={16} />
+                      <div 
+                        className="w-9 h-9 rounded-lg flex items-center justify-center"
+                        style={{ 
+                          backgroundColor: `${settings?.brandColors?.secondary || '#D4AF37'}1A`,
+                          color: settings?.brandColors?.secondary || '#D4AF37'
+                        }}
+                      >
+                        <FileText size={18} />
                       </div>
                       <p className="font-bold text-xs uppercase tracking-tight">#{rcp.number}</p>
                     </div>
@@ -114,8 +134,14 @@ export default function ReceiptView({ onNavigate }: ReceiptViewProps) {
                     <div className="flex items-center justify-end gap-1 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
                       <button 
                         onClick={() => { setSelectedReceipt(rcp); setIsViewModalOpen(true); }}
-                        className="flex items-center gap-1.5 px-3 py-1.5 text-black/40 hover:bg-black hover:text-white rounded-lg transition-all text-[10px] font-black uppercase tracking-widest" 
-                        title="View Details"
+                        className="flex items-center gap-1.5 px-3 py-1.5 text-black/40 hover:text-white rounded-lg transition-all text-[10px] font-black uppercase tracking-widest" 
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.backgroundColor = settings?.brandColors?.primary || '#000000';
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.backgroundColor = 'transparent';
+                        }}
+                        title="View & Print"
                       >
                         <Eye size={14} />
                         <span className="hidden lg:inline">View</span>
@@ -133,8 +159,14 @@ export default function ReceiptView({ onNavigate }: ReceiptViewProps) {
           {filteredReceipts.map((rcp: any) => (
             <div key={rcp.id} className="p-4 flex items-center justify-between group active:bg-gray-50 transition-colors" onClick={() => { setSelectedReceipt(rcp); setIsViewModalOpen(true); }}>
               <div className="flex items-center gap-3 min-w-0">
-                <div className="w-9 h-9 border border-black/5 bg-gray-50 flex items-center justify-center text-green-600 shrink-0">
-                  <ReceiptIcon size={16} />
+                <div 
+                  className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0"
+                  style={{ 
+                    backgroundColor: `${settings?.brandColors?.secondary || '#D4AF37'}1A`,
+                    color: settings?.brandColors?.secondary || '#D4AF37'
+                  }}
+                >
+                  <FileText size={16} />
                 </div>
                 <div className="min-w-0">
                   <p className="font-bold text-sm truncate">#{rcp.number} • {rcp.clientName}</p>

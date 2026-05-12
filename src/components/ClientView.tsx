@@ -34,7 +34,7 @@ export default function ClientView({ onNavigate }: ClientViewProps) {
   const [isProfileOpen, setIsProfileOpen] = useState(false);
 
   const { data: clients = [], optimisticInsert, optimisticDelete, optimisticUpdate } = useSupabaseQuery<Client>('clients', (q) => {
-    let query = q.select('*').order('createdAt', { ascending: false });
+    let query = q.select('*').order('id', { ascending: false });
     if (searchTerm) {
       query = query.or(`fullName.ilike.%${searchTerm}%,email.ilike.%${searchTerm}%,companyName.ilike.%${searchTerm}%`);
     }

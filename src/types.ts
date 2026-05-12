@@ -169,6 +169,7 @@ export interface Invoice {
   amountPaid: number;
   grandTotal: number;
   notes: string;
+  createdAt?: string;
 }
 
 export interface Payment {
@@ -227,6 +228,10 @@ export interface BusinessSettings {
   currency: string;
   taxRate: number;
   adminName: string;
+  bankName?: string;
+  accountName?: string;
+  accountNumber?: string;
+  swiftCode?: string;
   documentFont?: string;
 }
 

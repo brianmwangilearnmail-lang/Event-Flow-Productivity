@@ -9,9 +9,10 @@ import { DollarSign, Save } from 'lucide-react';
 interface ReceiptFormProps {
   invoice: Invoice;
   onSuccess: () => void;
+  optimisticUpdate?: (predicate: (item: Invoice) => boolean, updates: Partial<Invoice>) => void;
 }
 
-export default function ReceiptForm({ invoice, onSuccess }: ReceiptFormProps) {
+export default function ReceiptForm({ invoice, onSuccess, optimisticUpdate }: ReceiptFormProps) {
   const balance = invoice.grandTotal - (invoice.amountPaid || 0);
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -27,6 +28,18 @@ export default function ReceiptForm({ invoice, onSuccess }: ReceiptFormProps) {
       return;
     }
 
+    // Move optimistic update and close modal to the top for instant feedback
+    const newAmountPaid = (invoice.amountPaid || 0) + amount;
+    const newStatus = newAmountPaid >= invoice.grandTotal ? DocumentStatus.PAID : DocumentStatus.PARTIALLY_PAID;
+    
+    if (optimisticUpdate) {
+      optimisticUpdate(i => i.id === invoice.id, {
+        amountPaid: newAmountPaid,
+        status: newStatus
+      });
+    }
+    onSuccess();
+
     // 1. Create Payment
     const { data: payResult, error: payError } = await supabase.from('payments').insert({
       clientId: invoice.clientId,
@@ -40,7 +53,7 @@ export default function ReceiptForm({ invoice, onSuccess }: ReceiptFormProps) {
     }).select();
 
     if (payError) {
-      alert('Error recording payment: ' + payError.message);
+      console.error('Error recording payment:', payError);
       return;
     }
     const paymentId = payResult[0].id;
@@ -57,21 +70,18 @@ export default function ReceiptForm({ invoice, onSuccess }: ReceiptFormProps) {
     });
 
     if (receiptError) {
-      alert('Error creating receipt: ' + receiptError.message);
+      console.error('Error creating receipt:', receiptError);
       return;
     }
 
-    // 3. Update Invoice
-    const newAmountPaid = (invoice.amountPaid || 0) + amount;
-    const newStatus = newAmountPaid >= invoice.grandTotal ? DocumentStatus.PAID : DocumentStatus.PARTIALLY_PAID;
-    
+    // 3. Update Invoice in DB
     const { error: invoiceError } = await supabase.from('invoices').update({
       amountPaid: newAmountPaid,
       status: newStatus
     }).eq('id', invoice.id);
 
     if (invoiceError) {
-      alert('Error updating invoice: ' + invoiceError.message);
+      console.error('Error updating invoice:', invoiceError);
       return;
     }
 

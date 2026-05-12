@@ -15,7 +15,8 @@ import {
   ChevronRight,
   ArrowLeft,
   MoreHorizontal,
-  Eye
+  Eye,
+  AlertCircle
 } from 'lucide-react';
 import { useSupabaseQuery } from '../hooks/useSupabaseQuery';
 import { supabase } from '../lib/supabase';
@@ -43,8 +44,11 @@ export default function InvoiceView({ onNavigate }: InvoiceViewProps) {
   const [invoiceToDelete, setInvoiceToDelete] = useState<Invoice | null>(null);
   const [deleteReason, setDeleteReason] = useState("");
 
-  const { data: invoices = [], optimisticUpdate, optimisticDelete } = useSupabaseQuery<any>('invoices', (q) => {
-    let query = q.select('*, clients(fullName)').order('createdAt', { ascending: false });
+  const { data: settingsList = [] } = useSupabaseQuery<any>('settings', (q) => q.select('*'));
+  const settings = settingsList?.[0];
+
+  const { data: invoices = [], loading, error, optimisticInsert, optimisticUpdate, optimisticDelete } = useSupabaseQuery<any>('invoices', (q) => {
+    let query = q.select('*, clients(fullName), events(title)').order('id', { ascending: false });
     return query;
   }, []);
 
@@ -52,6 +56,7 @@ export default function InvoiceView({ onNavigate }: InvoiceViewProps) {
     return invoices.map(i => ({
       ...i,
       clientName: i.clients?.fullName || 'Unknown Client',
+      eventName: i.events?.title || 'Unknown Event'
     })).filter(i => {
       const matchesSearch = i.number.toLowerCase().includes(searchTerm.toLowerCase()) ||
         i.clientName.toLowerCase().includes(searchTerm.toLowerCase());
@@ -150,7 +155,8 @@ export default function InvoiceView({ onNavigate }: InvoiceViewProps) {
         </div>
         <button 
           onClick={() => setIsCreateModalOpen(true)}
-          className="flex items-center justify-center gap-2 px-6 py-3 bg-black text-white hover:bg-gold-deep transition-all font-black text-[10px] uppercase tracking-[0.2em] rounded-xl shadow-xl shadow-black/10 mx-4 sm:mx-0"
+          style={{ backgroundColor: settings?.brandColors?.primary || '#000000' }}
+          className="flex items-center justify-center gap-2 px-6 py-3 text-white hover:opacity-90 transition-all font-black text-[10px] uppercase tracking-[0.2em] rounded-xl shadow-xl shadow-black/10 mx-4 sm:mx-0"
         >
           <Plus size={16} />
           New Invoice
@@ -158,6 +164,12 @@ export default function InvoiceView({ onNavigate }: InvoiceViewProps) {
       </div>
 
       <div className="bg-white border border-black/5 shadow-sm overflow-hidden flex flex-col rounded-2xl mx-4 md:mx-0">
+        {error && (
+          <div className="p-4 bg-red-50 border-b border-red-100 flex items-center gap-3 text-red-600 text-xs font-bold uppercase tracking-wider">
+            <AlertCircle size={16} />
+            <span>Failed to load invoices: {error.message || String(error)}</span>
+          </div>
+        )}
         <div className="p-3 border-b border-black/5 flex flex-col sm:flex-row gap-3">
           <div className="relative flex-1">
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-black/20" size={16} />
@@ -170,7 +182,7 @@ export default function InvoiceView({ onNavigate }: InvoiceViewProps) {
             />
           </div>
           <div className="relative min-w-[140px]">
-            <Filter className="absolute left-3 top-1/2 -translate-y-1/2 text-gold-deep" size={14} />
+            <Filter className="absolute left-3 top-1/2 -translate-y-1/2" size={14} style={{ color: settings?.brandColors?.secondary || '#D4AF37' }} />
             <select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value as any)}
@@ -206,8 +218,10 @@ export default function InvoiceView({ onNavigate }: InvoiceViewProps) {
                     <div className="flex items-center gap-4">
                       <div className={cn(
                         "w-9 h-9 border border-black/5 flex items-center justify-center transition-colors",
-                        inv.status === DocumentStatus.PAID ? "bg-green-50 text-green-600" : "bg-white text-gold-deep"
-                      )}>
+                        inv.status === DocumentStatus.PAID ? "bg-green-50 text-green-600" : "bg-white"
+                      )}
+                      style={inv.status !== DocumentStatus.PAID ? { color: settings?.brandColors?.secondary || '#D4AF37' } : {}}
+                      >
                         <FileText size={16} />
                       </div>
                       <div>
@@ -228,8 +242,10 @@ export default function InvoiceView({ onNavigate }: InvoiceViewProps) {
                   <td className="px-8 py-6 text-right">
                     <p className={cn(
                       "font-serif text-lg tracking-tight italic",
-                      inv.grandTotal - (inv.amountPaid || 0) > 0 ? "text-gold-deep" : "text-black/10"
-                    )}>
+                      inv.grandTotal - (inv.amountPaid || 0) > 0 ? "" : "text-black/10"
+                    )}
+                    style={inv.grandTotal - (inv.amountPaid || 0) > 0 ? { color: settings?.brandColors?.secondary || '#D4AF37' } : {}}
+                    >
                       {inv.grandTotal - (inv.amountPaid || 0) > 0 ? formatCurrency(inv.grandTotal - (inv.amountPaid || 0)) : 'Settled'}
                     </p>
                   </td>
@@ -243,13 +259,9 @@ export default function InvoiceView({ onNavigate }: InvoiceViewProps) {
                           inv.status === DocumentStatus.PAID ? "bg-green-50 text-green-600 border-green-200" :
                           inv.status === DocumentStatus.UNPAID ? "bg-red-50 text-red-600 border-red-200" :
                           inv.status === DocumentStatus.PENDING_PAYMENT ? "bg-purple-50 text-purple-600 border-purple-200" :
-                          "bg-bg-base text-gold-deep border-black/10"
+                          "bg-bg-base border-black/10"
                         )}
-                        style={{
-                          backgroundImage: `url("data:image/svg+xml,%3Csvg stroke='currentColor' fill='none' stroke-width='2' viewBox='0 0 24 24' stroke-linecap='round' stroke-linejoin='round' xmlns='http://www.w3.org/2000/svg'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E")`,
-                          backgroundPosition: 'right 6px center',
-                          backgroundSize: '12px'
-                        }}
+                        style={inv.status !== DocumentStatus.PAID && inv.status !== DocumentStatus.UNPAID && inv.status !== DocumentStatus.PENDING_PAYMENT ? { color: settings?.brandColors?.secondary || '#D4AF37' } : {}}
                       >
                         <option value={DocumentStatus.DRAFT} className="bg-white text-black font-medium">Draft</option>
                         <option value={DocumentStatus.SENT} className="bg-white text-black font-medium">Sent</option>
@@ -262,7 +274,8 @@ export default function InvoiceView({ onNavigate }: InvoiceViewProps) {
                       {inv.status !== DocumentStatus.PAID && (
                         <button 
                           onClick={() => handleMarkPaid(inv)}
-                          className="px-4 py-2 bg-black text-white text-[9px] font-bold uppercase tracking-widest hover:bg-gold-deep transition-all shadow-lg shadow-black/10"
+                          style={{ backgroundColor: settings?.brandColors?.primary || '#000000' }}
+                          className="px-4 py-2 text-white text-[9px] font-bold uppercase tracking-widest hover:opacity-90 transition-all shadow-lg shadow-black/10"
                         >
                           Process Payment
                         </button>
@@ -272,7 +285,9 @@ export default function InvoiceView({ onNavigate }: InvoiceViewProps) {
                           setSelectedInvoice(inv);
                           setIsViewModalOpen(true);
                         }}
-                        className="flex items-center gap-1.5 px-3 py-1.5 text-black/40 hover:bg-black hover:text-white rounded-lg transition-all text-[10px] font-black uppercase tracking-widest"
+                        className="flex items-center gap-1.5 px-3 py-1.5 text-black/40 hover:text-white rounded-lg transition-all text-[10px] font-black uppercase tracking-widest"
+                        onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = settings?.brandColors?.primary || '#000000'; }}
+                        onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; }}
                         title="View Invoice"
                       >
                         <Eye size={14} />
@@ -289,7 +304,7 @@ export default function InvoiceView({ onNavigate }: InvoiceViewProps) {
                   </td>
                 </tr>
               ))}
-              {invoices.length === 0 && (
+              {filteredInvoices.length === 0 && !loading && (
                 <tr>
                   <td colSpan={6} className="px-8 py-32 text-center">
                     <div className="max-w-xs mx-auto space-y-4">
@@ -305,14 +320,16 @@ export default function InvoiceView({ onNavigate }: InvoiceViewProps) {
 
         {/* Mobile Card View */}
         <div className="md:hidden divide-y divide-gray-50">
-          {invoices.map((inv: any) => (
+          {filteredInvoices.map((inv: any) => (
             <div key={inv.id} className="p-4 flex flex-col gap-3 group active:bg-gray-50 transition-colors">
               <div className="flex items-center justify-between" onClick={() => { setSelectedInvoice(inv); setIsViewModalOpen(true); }}>
                 <div className="flex items-center gap-3 min-w-0">
                   <div className={cn(
                     "w-9 h-9 border border-black/5 flex items-center justify-center shrink-0",
-                    inv.status === DocumentStatus.PAID ? "bg-green-50 text-green-600" : "bg-white text-gold-deep"
-                  )}>
+                    inv.status === DocumentStatus.PAID ? "bg-green-50 text-green-600" : "bg-white"
+                  )}
+                  style={inv.status !== DocumentStatus.PAID ? { color: settings?.brandColors?.secondary || '#D4AF37' } : {}}
+                  >
                     <FileText size={16} />
                   </div>
                   <div className="min-w-0">
@@ -333,13 +350,9 @@ export default function InvoiceView({ onNavigate }: InvoiceViewProps) {
                       inv.status === DocumentStatus.PAID ? "bg-green-50 text-green-600 border-green-200" :
                       inv.status === DocumentStatus.UNPAID ? "bg-red-50 text-red-600 border-red-200" :
                       inv.status === DocumentStatus.PENDING_PAYMENT ? "bg-purple-50 text-purple-600 border-purple-200" :
-                      "bg-bg-base text-gold-deep border-black/10"
+                      "bg-bg-base border-black/10"
                     )}
-                    style={{
-                      backgroundImage: `url("data:image/svg+xml,%3Csvg stroke='currentColor' fill='none' stroke-width='2' viewBox='0 0 24 24' stroke-linecap='round' stroke-linejoin='round' xmlns='http://www.w3.org/2000/svg'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E")`,
-                      backgroundPosition: 'right 8px center',
-                      backgroundSize: '10px'
-                    }}
+                    style={inv.status !== DocumentStatus.PAID && inv.status !== DocumentStatus.UNPAID && inv.status !== DocumentStatus.PENDING_PAYMENT ? { color: settings?.brandColors?.secondary || '#D4AF37' } : {}}
                   >
                     <option value={DocumentStatus.DRAFT} className="bg-white text-black font-medium">Draft</option>
                     <option value={DocumentStatus.SENT} className="bg-white text-black font-medium">Sent</option>
@@ -352,7 +365,8 @@ export default function InvoiceView({ onNavigate }: InvoiceViewProps) {
                   {inv.status !== DocumentStatus.PAID && (
                     <button 
                       onClick={() => handleMarkPaid(inv)}
-                      className="px-3 py-1 bg-black text-white text-[9px] font-black uppercase tracking-widest rounded-md"
+                      style={{ backgroundColor: settings?.brandColors?.primary || '#000000' }}
+                      className="px-3 py-1 text-white text-[9px] font-black uppercase tracking-widest rounded-md"
                     >
                       Pay
                     </button>
@@ -396,6 +410,7 @@ export default function InvoiceView({ onNavigate }: InvoiceViewProps) {
               setIsReceiptModalOpen(false);
               setSelectedInvoice(null);
             }} 
+            optimisticUpdate={optimisticUpdate}
           />
         )}
       </Modal>
@@ -430,7 +445,13 @@ export default function InvoiceView({ onNavigate }: InvoiceViewProps) {
                   onClick={() => setSelectedClient(client)}
                   className="flex items-center gap-3 p-3 border border-black/5 rounded-xl hover:border-black transition-all text-left"
                 >
-                  <div className="w-10 h-10 bg-bg-base text-black/20 rounded-lg flex items-center justify-center shrink-0">
+                  <div 
+                    className="w-10 h-10 rounded-lg flex items-center justify-center shrink-0"
+                    style={{ 
+                      backgroundColor: `${settings?.brandColors?.secondary || '#D4AF37'}1A`,
+                      color: settings?.brandColors?.secondary || '#D4AF37'
+                    }}
+                  >
                     <Users size={18} />
                   </div>
                   <div>
@@ -448,6 +469,7 @@ export default function InvoiceView({ onNavigate }: InvoiceViewProps) {
               setIsCreateModalOpen(false);
               setSelectedClient(null);
             }} 
+            optimisticInsert={optimisticInsert}
           />
         )}
       </Modal>

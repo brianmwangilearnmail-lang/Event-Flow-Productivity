@@ -10,9 +10,10 @@ import Modal from './Modal';
 interface EventManagerProps {
   eventId: number;
   onBack: () => void;
+  onNavigate?: (view: any) => void;
 }
 
-export default function EventManager({ eventId, onBack }: EventManagerProps) {
+export default function EventManager({ eventId, onBack, onNavigate }: EventManagerProps) {
   const { data: eventData = [] } = useSupabaseQuery<Event>('events', (q) => q.select('*').eq('id', eventId), [eventId]);
   const event = eventData[0];
   const { data: quotations = [] } = useSupabaseQuery<Quotation>('quotations', (q) => q.select('*').eq('eventId', eventId), [eventId]);
@@ -128,7 +129,11 @@ export default function EventManager({ eventId, onBack }: EventManagerProps) {
       alert('Error generating invoice: ' + error.message);
     } else {
       logActivity(event.clientId, 'Invoice Generated', `Created final invoice from Event Manager for additional items`, event.id, 'Event');
-      alert("Invoice generated! Check your Invoices tab or Client Profile.");
+      if (onNavigate) {
+        onNavigate('invoices');
+      } else {
+        alert("Invoice generated! Check your Invoices tab or Client Profile.");
+      }
     }
   };
 

@@ -33,9 +33,10 @@ interface QuotationBuilderProps {
   isOpen: boolean;
   onClose: () => void;
   initialQuotation?: Quotation;
+  optimisticInsert?: (item: Quotation) => void;
 }
 
-export default function QuotationBuilder({ isOpen, onClose, initialQuotation }: QuotationBuilderProps) {
+export default function QuotationBuilder({ isOpen, onClose, initialQuotation, optimisticInsert }: QuotationBuilderProps) {
   const [selectedClientId, setSelectedClientId] = useState<number | null>(null);
   const [selectedEventId, setSelectedEventId] = useState<number | null>(null);
   const [lineItems, setLineItems] = useState<QuotationLineItem[]>([]);
@@ -127,6 +128,12 @@ export default function QuotationBuilder({ isOpen, onClose, initialQuotation }: 
       version: 1,
       preparedBy: 'Admin User'
     };
+
+    // Optimistic Update
+    if (optimisticInsert) {
+      optimisticInsert({ id: -Date.now(), ...quotation } as Quotation);
+    }
+    onClose();
 
     const { data: result, error } = await supabase.from('quotations').insert(quotation).select();
     if (error) {

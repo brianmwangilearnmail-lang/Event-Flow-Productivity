@@ -40,8 +40,11 @@ export default function QuotationView({ onNavigate }: QuotationViewProps) {
   const [selectedQuote, setSelectedQuote] = useState<Quotation | null>(null);
   const [statusFilter, setStatusFilter] = useState<DocumentStatus | 'All'>('All');
 
-  const { data: quotations = [], optimisticUpdate, optimisticDelete } = useSupabaseQuery<any>('quotations', (q) => {
-    let query = q.select('*, clients(fullName), events(title)').order('createdAt', { ascending: false });
+  const { data: settingsList = [] } = useSupabaseQuery<any>('settings', (q) => q.select('*'));
+  const settings = settingsList?.[0];
+
+  const { data: quotations = [], optimisticInsert, optimisticUpdate, optimisticDelete } = useSupabaseQuery<any>('quotations', (q) => {
+    let query = q.select('*, clients(fullName), events(title)').order('id', { ascending: false });
     return query;
   }, []);
 
@@ -126,7 +129,8 @@ export default function QuotationView({ onNavigate }: QuotationViewProps) {
         </div>
         <button 
           onClick={() => setIsBuilderOpen(true)}
-          className="flex items-center justify-center gap-2 px-6 py-3 bg-black text-white rounded-xl font-bold text-xs"
+          style={{ backgroundColor: settings?.brandColors?.primary || '#000000' }}
+          className="flex items-center justify-center gap-2 px-6 py-3 text-white rounded-xl font-bold text-xs"
         >
           <Plus size={16} />
           New Quotation
@@ -183,9 +187,15 @@ export default function QuotationView({ onNavigate }: QuotationViewProps) {
                 <tr key={quote.id} className="hover:bg-gray-50/50 transition-colors group">
                   <td className="px-6 py-5">
                     <div className="flex items-center gap-4">
-                      <div className="w-9 h-9 rounded-lg bg-gold-50 flex items-center justify-center text-[#D4AF37]">
-                        <FileText size={18} />
-                      </div>
+                    <div 
+                      className="w-9 h-9 rounded-lg flex items-center justify-center"
+                      style={{ 
+                        backgroundColor: `${settings?.brandColors?.secondary || '#D4AF37'}1A`,
+                        color: settings?.brandColors?.secondary || '#D4AF37'
+                      }}
+                    >
+                      <FileText size={18} />
+                    </div>
                       <div>
                         <p className="font-bold text-sm">#{quote.number}</p>
                         <p className="text-[10px] text-gray-400 uppercase tracking-widest mt-0.5">Created: {new Date(quote.createdAt).toLocaleDateString()}</p>
@@ -244,7 +254,13 @@ export default function QuotationView({ onNavigate }: QuotationViewProps) {
                     <div className="flex items-center justify-end gap-1 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
                       <button 
                         onClick={() => { setSelectedQuote(quote); setIsViewModalOpen(true); }}
-                        className="flex items-center gap-1.5 px-3 py-1.5 text-black/40 hover:bg-black hover:text-white rounded-lg transition-all text-[10px] font-black uppercase tracking-widest" 
+                        className="flex items-center gap-1.5 px-3 py-1.5 text-black/40 hover:text-white rounded-lg transition-all text-[10px] font-black uppercase tracking-widest" 
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.backgroundColor = settings?.brandColors?.primary || '#000000';
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.backgroundColor = 'transparent';
+                        }}
                         title="View & Share"
                       >
                         <Eye size={14} />
@@ -271,7 +287,13 @@ export default function QuotationView({ onNavigate }: QuotationViewProps) {
             <div key={quote.id} className="p-4 flex flex-col gap-3 group active:bg-gray-50 transition-colors">
               <div className="flex items-center justify-between" onClick={() => { setSelectedQuote(quote); setIsViewModalOpen(true); }}>
                 <div className="flex items-center gap-3 min-w-0">
-                  <div className="w-9 h-9 rounded-lg bg-gold-50 flex items-center justify-center text-[#D4AF37] shrink-0">
+                  <div 
+                    className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0"
+                    style={{ 
+                      backgroundColor: `${settings?.brandColors?.secondary || '#D4AF37'}1A`,
+                      color: settings?.brandColors?.secondary || '#D4AF37'
+                    }}
+                  >
                     <FileText size={16} />
                   </div>
                   <div className="min-w-0">
@@ -310,7 +332,7 @@ export default function QuotationView({ onNavigate }: QuotationViewProps) {
                     <option value={DocumentStatus.DECLINED} className="bg-white text-black font-medium">Declined</option>
                   </select>
                   <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest">
-                    {new Date(quote.createdAt).toLocaleDateString()}
+                    {new Date(quote.date || quote.createdAt).toLocaleDateString()}
                   </p>
               </div>
             </div>
@@ -318,7 +340,11 @@ export default function QuotationView({ onNavigate }: QuotationViewProps) {
         </div>
       </div>
 
-      <QuotationBuilder isOpen={isBuilderOpen} onClose={() => setIsBuilderOpen(false)} />
+      <QuotationBuilder 
+        isOpen={isBuilderOpen} 
+        onClose={() => setIsBuilderOpen(false)} 
+        optimisticInsert={optimisticInsert}
+      />
 
       <Modal 
         isOpen={isViewModalOpen} 

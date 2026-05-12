@@ -132,7 +132,7 @@ export default function EventView({ onNavigate }: EventViewProps) {
   };
 
   if (managingEventId) {
-    return <EventManager eventId={managingEventId} onBack={() => setManagingEventId(null)} />;
+    return <EventManager eventId={managingEventId} onBack={() => setManagingEventId(null)} onNavigate={onNavigate} />;
   }
 
   return (

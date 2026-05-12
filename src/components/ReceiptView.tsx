@@ -9,7 +9,9 @@ import {
   Eye,
   Calendar,
   ChevronRight,
-  ArrowLeft
+  ArrowLeft,
+  Plus,
+  FileText
 } from 'lucide-react';
 import { useSupabaseQuery } from '../hooks/useSupabaseQuery';
 import { supabase } from '../lib/supabase';

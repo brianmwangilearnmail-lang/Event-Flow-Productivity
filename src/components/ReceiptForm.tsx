@@ -87,8 +87,6 @@ export default function ReceiptForm({ invoice, onSuccess, optimisticUpdate }: Re
 
     // 4. Log Activity
     await logActivity(invoice.clientId, 'Payment Recorded', `Payment of ${formatCurrency(amount)} received for Invoice #${invoice.number}`, paymentId, 'Receipt', invoice);
-
-    onSuccess();
   };
 
   return (

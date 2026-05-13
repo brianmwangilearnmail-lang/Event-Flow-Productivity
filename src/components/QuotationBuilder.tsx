@@ -37,10 +37,11 @@ interface QuotationBuilderProps {
   onClose: () => void;
   initialQuotation?: Quotation;
   optimisticInsert?: (item: Quotation) => void;
+  optimisticUpdate?: (predicate: (item: Quotation) => boolean, update: Partial<Quotation>) => void;
   defaultQuickQuote?: boolean;
 }
 
-export default function QuotationBuilder({ isOpen, onClose, initialQuotation, optimisticInsert, defaultQuickQuote }: QuotationBuilderProps) {
+export default function QuotationBuilder({ isOpen, onClose, initialQuotation, optimisticInsert, optimisticUpdate, defaultQuickQuote }: QuotationBuilderProps) {
   const [selectedClientId, setSelectedClientId] = useState<number | null>(null);
   const [selectedEventId, setSelectedEventId] = useState<number | null>(null);
   const [lineItems, setLineItems] = useState<QuotationLineItem[]>([]);
@@ -65,15 +66,29 @@ export default function QuotationBuilder({ isOpen, onClose, initialQuotation, op
 
   useEffect(() => {
     if (isOpen) {
-      setIsQuickQuote(defaultQuickQuote || false);
+      if (initialQuotation) {
+        setSelectedClientId(initialQuotation.clientId);
+        setSelectedEventId(initialQuotation.eventId || null);
+        setLineItems(initialQuotation.items || []);
+        setGlobalDiscount(initialQuotation.globalDiscount || 0);
+        setDepositRequired(initialQuotation.depositRequired || 0);
+        setTaxRate((initialQuotation.taxTotal / (initialQuotation.subtotal - initialQuotation.discountTotal)) * 100 || settings?.taxRate || 0);
+        setIsQuickQuote(!initialQuotation.eventId);
+        // If it's a quick quote, try to find the event title from related events if possible
+        // but usually quick quotes don't have events yet.
+      } else {
+        setSelectedClientId(null);
+        setSelectedEventId(null);
+        setLineItems([]);
+        setGlobalDiscount(0);
+        setDepositRequired(0);
+        setTaxRate(settings?.taxRate || 0);
+        setIsQuickQuote(defaultQuickQuote || false);
+        setQuickQuoteTitle('');
+        setQuickQuoteDate('');
+      }
     }
-  }, [isOpen, defaultQuickQuote]);
-
-  useEffect(() => {
-    if (settings) {
-      setTaxRate(settings.taxRate);
-    }
-  }, [settings]);
+  }, [isOpen, initialQuotation, settings]);
 
   const totals = useMemo(() => {
     const subtotal = lineItems.reduce((sum, item) => sum + (item.quantity * item.unitPrice * (1 - item.discount/100)), 0);
@@ -155,12 +170,12 @@ export default function QuotationBuilder({ isOpen, onClose, initialQuotation, op
       await logActivity(selectedClientId, 'Event Created', `Quick event "${quickQuoteTitle}" scheduled via Quotation Builder`, finalEventId, 'Event');
     }
 
-    const quotation: Omit<Quotation, 'id'> = {
+    const quotationData: any = {
       clientId: selectedClientId,
       eventId: finalEventId || undefined,
-      number: `QTN-${Date.now().toString().slice(-6)}`,
-      date: new Date().toISOString().split('T')[0],
-      validUntil: new Date(Date.now() + (settings?.defaultValidityDays || 14) * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+      number: initialQuotation?.number || `QTN-${Date.now().toString().slice(-6)}`,
+      date: initialQuotation?.date || new Date().toISOString().split('T')[0],
+      validUntil: initialQuotation?.validUntil || new Date(Date.now() + (settings?.defaultValidityDays || 14) * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
       currency: settings?.currency || 'KES',
       status,
       items: lineItems,
@@ -170,23 +185,36 @@ export default function QuotationBuilder({ isOpen, onClose, initialQuotation, op
       taxTotal: totals.taxTotal,
       depositRequired,
       grandTotal: totals.grandTotal,
-      version: 1,
-      preparedBy: 'Admin User'
+      version: (initialQuotation?.version || 0) + 1,
+      preparedBy: initialQuotation?.preparedBy || 'Admin User'
     };
 
     // Optimistic Update
-    if (optimisticInsert) {
-      optimisticInsert({ id: -Date.now(), ...quotation } as Quotation);
+    if (initialQuotation?.id) {
+      if (optimisticUpdate) {
+        optimisticUpdate(q => q.id === initialQuotation.id, quotationData);
+      }
+    } else if (optimisticInsert) {
+      optimisticInsert({ id: -Date.now(), ...quotationData } as Quotation);
     }
     onClose();
 
-    const { data: result, error } = await supabase.from('quotations').insert(quotation).select();
+    const { data: result, error } = initialQuotation?.id
+      ? await supabase.from('quotations').update(quotationData).eq('id', initialQuotation.id).select()
+      : await supabase.from('quotations').insert(quotationData).select();
+
     if (error) {
       alert('Error saving quotation: ' + error.message);
       return;
     }
     const id = result[0].id;
-    await logActivity(selectedClientId, 'Quotation Created', `New quotation #${quotation.number} saved as ${status}`, id, 'Quotation');
+    await logActivity(
+      selectedClientId, 
+      initialQuotation?.id ? 'Quotation Updated' : 'Quotation Created', 
+      `Quotation #${quotationData.number} ${initialQuotation?.id ? 'updated' : 'saved'} as ${status}`, 
+      id, 
+      'Quotation'
+    );
     onClose();
   };
 

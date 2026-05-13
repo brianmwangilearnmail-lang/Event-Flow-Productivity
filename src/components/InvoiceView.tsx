@@ -16,7 +16,8 @@ import {
   ArrowLeft,
   MoreHorizontal,
   Eye,
-  AlertCircle
+  AlertCircle,
+  Pencil
 } from 'lucide-react';
 import { useSupabaseQuery } from '../hooks/useSupabaseQuery';
 import { supabase } from '../lib/supabase';
@@ -296,6 +297,20 @@ export default function InvoiceView({ onNavigate }: InvoiceViewProps) {
                         <span className="hidden lg:inline">View</span>
                       </button>
                       <button 
+                        onClick={() => {
+                          setSelectedInvoice(inv);
+                          setSelectedClient(clients.find(c => c.id === inv.clientId) || null);
+                          setIsCreateModalOpen(true);
+                        }}
+                        className="flex items-center gap-1.5 px-3 py-1.5 text-black/40 hover:text-white rounded-lg transition-all text-[10px] font-black uppercase tracking-widest"
+                        onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = settings?.brandColors?.primary || '#000000'; }}
+                        onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; }}
+                        title="Edit Invoice"
+                      >
+                        <Pencil size={14} />
+                        <span className="hidden lg:inline">Edit</span>
+                      </button>
+                      <button 
                         onClick={() => setInvoiceToDelete(inv)}
                         className="flex items-center gap-1.5 px-3 py-1.5 text-black/40 hover:bg-red-50 hover:text-red-500 rounded-lg transition-all text-[10px] font-black uppercase tracking-widest ml-1"
                         title="Delete Invoice"
@@ -341,7 +356,20 @@ export default function InvoiceView({ onNavigate }: InvoiceViewProps) {
                     </p>
                   </div>
                 </div>
-                <ChevronRight size={16} className="text-gray-300" />
+                <div className="flex items-center gap-2">
+                  <button 
+                    onClick={(e) => { 
+                      e.stopPropagation(); 
+                      setSelectedInvoice(inv); 
+                      setSelectedClient(clients.find(c => c.id === inv.clientId) || null);
+                      setIsCreateModalOpen(true);
+                    }}
+                    className="p-2 text-black/20 hover:text-black transition-colors"
+                  >
+                    <Pencil size={14} />
+                  </button>
+                  <ChevronRight size={16} className="text-gray-300" />
+                </div>
               </div>
               <div className="flex items-center justify-between pl-12 border-t border-gray-50 pt-2">
                  <select
@@ -468,11 +496,14 @@ export default function InvoiceView({ onNavigate }: InvoiceViewProps) {
         ) : (
           <InvoiceForm 
             client={selectedClient} 
+            initialInvoice={selectedInvoice || undefined}
             onSuccess={() => {
               setIsCreateModalOpen(false);
               setSelectedClient(null);
+              setSelectedInvoice(null);
             }} 
             optimisticInsert={optimisticInsert}
+            optimisticUpdate={optimisticUpdate}
           />
         )}
       </Modal>

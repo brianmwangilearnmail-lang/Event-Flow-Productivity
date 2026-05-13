@@ -20,7 +20,8 @@ import {
   ArrowLeft,
   Zap,
   Calendar,
-  MoreHorizontal
+  MoreHorizontal,
+  Pencil
 } from 'lucide-react';
 import { useSupabaseQuery } from '../hooks/useSupabaseQuery';
 import { supabase } from '../lib/supabase';
@@ -293,6 +294,20 @@ export default function QuotationView({ onNavigate }: QuotationViewProps) {
                         <span className="hidden lg:inline">View</span>
                       </button>
                       <button 
+                        onClick={() => { setSelectedQuote(quote); setIsBuilderOpen(true); }}
+                        className="flex items-center gap-1.5 px-3 py-1.5 text-black/40 hover:text-white rounded-lg transition-all text-[10px] font-black uppercase tracking-widest"
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.backgroundColor = settings?.brandColors?.primary || '#000000';
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.backgroundColor = 'transparent';
+                        }}
+                        title="Edit Quotation"
+                      >
+                        <Pencil size={14} />
+                        <span className="hidden lg:inline">Edit</span>
+                      </button>
+                      <button 
                         onClick={() => deleteQuotation(quote.id!)}
                         className="p-3 md:p-2 hover:bg-red-50 hover:text-red-500 rounded-lg transition-all" 
                         title="Delete"
@@ -329,7 +344,15 @@ export default function QuotationView({ onNavigate }: QuotationViewProps) {
                     </p>
                   </div>
                 </div>
-                <ChevronRight size={16} className="text-gray-300" />
+                <div className="flex items-center gap-2">
+                  <button 
+                    onClick={(e) => { e.stopPropagation(); setSelectedQuote(quote); setIsBuilderOpen(true); }}
+                    className="p-2 text-black/20 hover:text-black transition-colors"
+                  >
+                    <Pencil size={14} />
+                  </button>
+                  <ChevronRight size={16} className="text-gray-300" />
+                </div>
               </div>
               <div className="flex items-center  justify-between pl-12 border-t border-gray-50 pt-2">
                  <select
@@ -371,8 +394,11 @@ export default function QuotationView({ onNavigate }: QuotationViewProps) {
         onClose={() => {
           setIsBuilderOpen(false);
           setIsQuickMode(false);
+          setSelectedQuote(null);
         }} 
+        initialQuotation={selectedQuote || undefined}
         optimisticInsert={optimisticInsert}
+        optimisticUpdate={optimisticUpdate}
         defaultQuickQuote={isQuickMode}
       />
 

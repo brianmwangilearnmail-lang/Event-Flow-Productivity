@@ -2,7 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { useSupabaseQuery } from '../hooks/useSupabaseQuery';
 import { supabase } from '../lib/supabase';
 import { logActivity } from '../db';
-import { Client, DocumentStatus, QuotationLineItem, CatalogItem, Quotation, Event } from '../types';
+import { Client, DocumentStatus, QuotationLineItem, CatalogItem, Quotation, Event, Invoice } from '../types';
 import { Plus, Trash2, Search, Package, FileText, ChevronRight } from 'lucide-react';
 import { formatCurrency, cn } from '../lib/utils';
 import Modal from './Modal';
@@ -10,16 +10,27 @@ import Modal from './Modal';
 interface InvoiceFormProps {
   client: Client;
   onSuccess: () => void;
+  initialInvoice?: Invoice;
   optimisticInsert?: (item: any) => void;
+  optimisticUpdate?: (predicate: (item: any) => boolean, update: any) => void;
 }
 
-export default function InvoiceForm({ client, onSuccess, optimisticInsert }: InvoiceFormProps) {
+export default function InvoiceForm({ client, onSuccess, optimisticInsert, optimisticUpdate, initialInvoice }: InvoiceFormProps) {
   const [selectedEventId, setSelectedEventId] = useState<number | null>(null);
   const [lineItems, setLineItems] = useState<QuotationLineItem[]>([]);
   const [dueDate, setDueDate] = useState('');
   const [notes, setNotes] = useState('');
   const [isItemFinderOpen, setIsItemFinderOpen] = useState(false);
   const [isQuotationPickerOpen, setIsQuotationPickerOpen] = useState(false);
+
+  React.useEffect(() => {
+    if (initialInvoice) {
+      setSelectedEventId(initialInvoice.eventId);
+      setLineItems(initialInvoice.items || []);
+      setDueDate(initialInvoice.dueDate);
+      setNotes(initialInvoice.notes || '');
+    }
+  }, [initialInvoice]);
 
   const { data: events = [] } = useSupabaseQuery<Event>('events', (q) => 
     q.select('*').eq('clientId', client.id).order('date')
@@ -92,34 +103,47 @@ export default function InvoiceForm({ client, onSuccess, optimisticInsert }: Inv
     const invoiceData = {
       clientId: client.id,
       eventId: selectedEventId,
-      number: `INV-${Date.now().toString().slice(-6)}`,
-      type: 'Full',
-      issueDate: new Date().toISOString().split('T')[0],
+      number: initialInvoice?.number || `INV-${Date.now().toString().slice(-6)}`,
+      type: initialInvoice?.type || 'Full',
+      issueDate: initialInvoice?.issueDate || new Date().toISOString().split('T')[0],
       dueDate,
-      status: DocumentStatus.SENT,
+      status: initialInvoice?.status || DocumentStatus.SENT,
       items: lineItems,
       subtotal: totals.subtotal,
       taxTotal: totals.taxTotal,
-      discountTotal: 0,
-      amountPaid: 0,
+      discountTotal: initialInvoice?.discountTotal || 0,
+      amountPaid: initialInvoice?.amountPaid || 0,
       grandTotal: totals.grandTotal,
       notes
     };
 
     // Optimistic Update
-    if (optimisticInsert) {
+    if (initialInvoice?.id) {
+      if (optimisticUpdate) {
+        optimisticUpdate(inv => inv.id === initialInvoice.id, invoiceData);
+      }
+    } else if (optimisticInsert) {
       optimisticInsert({ id: -Date.now(), ...invoiceData });
     }
     onSuccess();
 
-    const { data: result, error } = await supabase.from('invoices').insert(invoiceData).select();
+    const { data: result, error } = initialInvoice?.id
+      ? await supabase.from('invoices').update(invoiceData).eq('id', initialInvoice.id).select()
+      : await supabase.from('invoices').insert(invoiceData).select();
+
     if (error) {
       alert('Error saving invoice: ' + error.message);
       return;
     }
 
     const invoiceId = result[0].id;
-    logActivity(client.id, 'Invoice Created', `Invoice created with ${lineItems.length} items for ${formatCurrency(totals.grandTotal)}`, Number(invoiceId), 'Invoice');
+    logActivity(
+      client.id, 
+      initialInvoice?.id ? 'Invoice Updated' : 'Invoice Created', 
+      `Invoice #${invoiceData.number} ${initialInvoice?.id ? 'updated' : 'created'} for ${formatCurrency(totals.grandTotal)}`, 
+      Number(invoiceId), 
+      'Invoice'
+    );
     onSuccess();
   };
 

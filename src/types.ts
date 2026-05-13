@@ -133,7 +133,7 @@ export interface QuotationLineItem {
 export interface Quotation {
   id?: number;
   clientId: number;
-  eventId: number;
+  eventId?: number;
   number: string;
   date: string;
   validUntil: string;

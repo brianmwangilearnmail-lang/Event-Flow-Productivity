@@ -280,7 +280,7 @@ export default function InvoiceForm({ client, onSuccess, optimisticInsert }: Inv
       {/* Quotation Picker Modal */}
       <Modal isOpen={isQuotationPickerOpen} onClose={() => setIsQuotationPickerOpen(false)} title="Select Quotation Items">
         <div className="grid grid-cols-1 gap-3 max-h-[60vh] overflow-y-auto pr-2">
-          {quotations.filter(q => [DocumentStatus.SENT, DocumentStatus.RECEIVED, DocumentStatus.APPROVED, DocumentStatus.CREATED, DocumentStatus.DRAFT].includes(q.status)).map(q => (
+          {quotations.filter(q => q && [DocumentStatus.SENT, DocumentStatus.RECEIVED, DocumentStatus.APPROVED, DocumentStatus.CREATED, DocumentStatus.DRAFT].includes(q.status)).map(q => (
             <button 
               key={q.id} 
               onClick={() => handleAddItemsFromQuotation(q)}

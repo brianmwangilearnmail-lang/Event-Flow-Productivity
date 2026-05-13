@@ -64,6 +64,7 @@ import DashboardHome from './components/DashboardHome';
 import EventView from './components/EventView';
 import DocumentsView from './components/DocumentsView';
 import { BusinessSettings } from './types';
+import { useSettings } from './context/SettingsContext';
 import ActivityLogView from './components/ActivityLogView';
 import { Files } from 'lucide-react';
 import { Routes, Route, Navigate } from 'react-router-dom';
@@ -99,8 +100,7 @@ function DashboardContent() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const { user, logout } = useAuth();
 
-  const { data: settingsList = [] } = useSupabaseQuery<BusinessSettings>('settings', (q) => q.select('*'));
-  const settings = settingsList[0];
+  const { settings } = useSettings();
 
   const navItems = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },

@@ -12,7 +12,9 @@ import {
   Info,
   DollarSign,
   Briefcase,
-  Image as ImageIcon
+  Image as ImageIcon,
+  Zap,
+  Calendar
 } from 'lucide-react';
 import { useSupabaseQuery } from '../hooks/useSupabaseQuery';
 import { supabase } from '../lib/supabase';
@@ -28,15 +30,17 @@ import {
 } from '../types';
 import { cn, formatCurrency } from '../lib/utils';
 import Modal from './Modal';
+import { useSettings } from '../context/SettingsContext';
 
 interface QuotationBuilderProps {
   isOpen: boolean;
   onClose: () => void;
   initialQuotation?: Quotation;
   optimisticInsert?: (item: Quotation) => void;
+  defaultQuickQuote?: boolean;
 }
 
-export default function QuotationBuilder({ isOpen, onClose, initialQuotation, optimisticInsert }: QuotationBuilderProps) {
+export default function QuotationBuilder({ isOpen, onClose, initialQuotation, optimisticInsert, defaultQuickQuote }: QuotationBuilderProps) {
   const [selectedClientId, setSelectedClientId] = useState<number | null>(null);
   const [selectedEventId, setSelectedEventId] = useState<number | null>(null);
   const [lineItems, setLineItems] = useState<QuotationLineItem[]>([]);
@@ -45,6 +49,9 @@ export default function QuotationBuilder({ isOpen, onClose, initialQuotation, op
   const [taxRate, setTaxRate] = useState(0);
   const [isItemFinderOpen, setIsItemFinderOpen] = useState(false);
   const [priceMode, setPriceMode] = useState<'client' | 'supplier'>('client');
+  const [isQuickQuote, setIsQuickQuote] = useState(defaultQuickQuote || false);
+  const [quickQuoteTitle, setQuickQuoteTitle] = useState('');
+  const [quickQuoteDate, setQuickQuoteDate] = useState('');
 
   const { data: clients = [] } = useSupabaseQuery<Client>('clients', (q) => q.select('*').order('fullName'));
   const { data: events = [] } = useSupabaseQuery<Event>('events', (q) => {
@@ -54,8 +61,13 @@ export default function QuotationBuilder({ isOpen, onClose, initialQuotation, op
     return q.select('*').limit(0);
   }, [selectedClientId]);
   const { data: catalogItems = [] } = useSupabaseQuery<CatalogItem>('catalog', (q) => q.select('*').eq('isArchived', false).order('name'));
-  const { data: settingsList = [] } = useSupabaseQuery<BusinessSettings>('settings', (q) => q.select('*'));
-  const settings = settingsList?.[0];
+  const { settings } = useSettings();
+
+  useEffect(() => {
+    if (isOpen) {
+      setIsQuickQuote(defaultQuickQuote || false);
+    }
+  }, [isOpen, defaultQuickQuote]);
 
   useEffect(() => {
     if (settings) {
@@ -104,15 +116,48 @@ export default function QuotationBuilder({ isOpen, onClose, initialQuotation, op
     setLineItems(lineItems.filter((_, i) => i !== index));
   };
 
-  const handleSave = async (status: DocumentStatus) => {
-    if (!selectedClientId || !selectedEventId) {
-      alert('Please select a client and event');
+  const handleSave = async (status: DocumentStatus, createEvent = false) => {
+    if (!selectedClientId) {
+      alert('Please select a client');
       return;
+    }
+
+    if (!isQuickQuote && !selectedEventId) {
+      alert('Please select an event');
+      return;
+    }
+
+    let finalEventId = selectedEventId;
+
+    // If Schedule Event is requested or it's a quick quote that needs an event now
+    if (createEvent && isQuickQuote) {
+      if (!quickQuoteTitle) {
+        alert('Please enter an event title to schedule it');
+        return;
+      }
+
+      const newEvent = {
+        clientId: selectedClientId,
+        title: quickQuoteTitle,
+        date: quickQuoteDate || new Date().toISOString().split('T')[0],
+        status: 'Confirmed',
+        venue: 'TBD',
+        startTime: '09:00',
+        endTime: '17:00'
+      };
+
+      const { data: createdEvent, error: eventError } = await supabase.from('events').insert(newEvent).select();
+      if (eventError) {
+        alert('Error creating event: ' + eventError.message);
+        return;
+      }
+      finalEventId = createdEvent[0].id;
+      await logActivity(selectedClientId, 'Event Created', `Quick event "${quickQuoteTitle}" scheduled via Quotation Builder`, finalEventId, 'Event');
     }
 
     const quotation: Omit<Quotation, 'id'> = {
       clientId: selectedClientId,
-      eventId: selectedEventId,
+      eventId: finalEventId || undefined,
       number: `QTN-${Date.now().toString().slice(-6)}`,
       date: new Date().toISOString().split('T')[0],
       validUntil: new Date(Date.now() + (settings?.defaultValidityDays || 14) * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
@@ -164,21 +209,73 @@ export default function QuotationBuilder({ isOpen, onClose, initialQuotation, op
                   {clients.map(c => <option key={c.id} value={c.id}>{c.fullName}</option>)}
                 </select>
               </div>
-              <div className="space-y-1">
-                <label className="text-[8px] font-bold uppercase tracking-[0.2em] text-black/30">Event</label>
-                <select 
-                  disabled={!selectedClientId}
+              
+              <div className="pt-2 border-t border-black/5 mt-2">
+                <button 
+                  onClick={() => setIsQuickQuote(!isQuickQuote)}
                   className={cn(
-                    "w-full px-2 py-1.5 bg-white border border-black/5 rounded-lg outline-none focus:ring-1 focus:ring-gold-deep font-bold text-[10px]",
-                    !selectedClientId && "opacity-50"
+                    "w-full flex items-center justify-between p-2 rounded-lg transition-all",
+                    isQuickQuote ? "bg-black text-white" : "bg-white text-black/40 hover:text-black border border-black/5"
                   )}
-                  value={selectedEventId || ''}
-                  onChange={(e) => setSelectedEventId(Number(e.target.value))}
                 >
-                  <option value="">Select event...</option>
-                  {events.map(e => <option key={e.id} value={e.id}>{e.title}</option>)}
-                </select>
+                  <div className="flex items-center gap-2">
+                    <Zap size={14} className={isQuickQuote ? "text-yellow-400" : ""} />
+                    <span className="text-[10px] font-black uppercase tracking-widest">Quick Quote Mode</span>
+                  </div>
+                  <div className={cn(
+                    "w-8 h-4 rounded-full relative transition-all",
+                    isQuickQuote ? "bg-yellow-400" : "bg-black/10"
+                  )}>
+                    <div className={cn(
+                      "w-3 h-3 bg-white rounded-full absolute top-0.5 transition-all",
+                      isQuickQuote ? "right-0.5" : "left-0.5"
+                    )} />
+                  </div>
+                </button>
               </div>
+
+              {isQuickQuote ? (
+                <div className="space-y-4 animate-in fade-in slide-in-from-top-2 duration-300">
+                  <div className="space-y-1">
+                    <label className="text-[8px] font-bold uppercase tracking-[0.2em] text-black/30">Tentative Event Title</label>
+                    <input 
+                      type="text"
+                      placeholder="e.g. Summer Gala 2024"
+                      className="w-full px-2 py-1.5 bg-white border border-black/5 rounded-lg outline-none focus:ring-1 focus:ring-gold-deep font-bold text-[10px]"
+                      value={quickQuoteTitle}
+                      onChange={(e) => setQuickQuoteTitle(e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[8px] font-bold uppercase tracking-[0.2em] text-black/30">Event Date (Optional)</label>
+                    <div className="relative">
+                      <Calendar className="absolute left-2 top-1/2 -translate-y-1/2 text-black/20" size={12} />
+                      <input 
+                        type="date"
+                        className="w-full pl-7 pr-2 py-1.5 bg-white border border-black/5 rounded-lg outline-none focus:ring-1 focus:ring-gold-deep font-bold text-[10px]"
+                        value={quickQuoteDate}
+                        onChange={(e) => setQuickQuoteDate(e.target.value)}
+                      />
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-1 animate-in fade-in duration-300">
+                  <label className="text-[8px] font-bold uppercase tracking-[0.2em] text-black/30">Event</label>
+                  <select 
+                    disabled={!selectedClientId}
+                    className={cn(
+                      "w-full px-2 py-1.5 bg-white border border-black/5 rounded-lg outline-none focus:ring-1 focus:ring-gold-deep font-bold text-[10px]",
+                      !selectedClientId && "opacity-50"
+                    )}
+                    value={selectedEventId || ''}
+                    onChange={(e) => setSelectedEventId(Number(e.target.value))}
+                  >
+                    <option value="">Select event...</option>
+                    {events.map(e => <option key={e.id} value={e.id}>{e.title}</option>)}
+                  </select>
+                </div>
+              )}
             </div>
             <div className="flex flex-row md:flex-col justify-between items-center md:items-end gap-3">
               <div className="shrink-0">
@@ -188,8 +285,9 @@ export default function QuotationBuilder({ isOpen, onClose, initialQuotation, op
                     onClick={() => setPriceMode('client')}
                     className={cn(
                       "px-3 py-1 text-[8px] font-black uppercase tracking-widest transition-all rounded-md", 
-                      priceMode === 'client' ? "bg-black text-white" : "text-black/40 hover:text-black"
+                      priceMode === 'client' ? "text-white" : "text-black/40 hover:text-black"
                     )}
+                    style={priceMode === 'client' ? { backgroundColor: settings?.brandColors?.primary || '#000000' } : {}}
                   >
                     Client
                   </button>
@@ -197,16 +295,26 @@ export default function QuotationBuilder({ isOpen, onClose, initialQuotation, op
                     onClick={() => setPriceMode('supplier')}
                     className={cn(
                       "px-3 py-1 text-[8px] font-black uppercase tracking-widest transition-all rounded-md", 
-                      priceMode === 'supplier' ? "bg-black text-white" : "text-black/40 hover:text-black"
+                      priceMode === 'supplier' ? "text-white" : "text-black/40 hover:text-black"
                     )}
+                    style={priceMode === 'supplier' ? { backgroundColor: settings?.brandColors?.primary || '#000000' } : {}}
                   >
                     Supplier
                   </button>
                 </div>
               </div>
-              <div className="p-2 md:p-3 bg-gold-deep/5 border border-gold-deep/20 rounded-lg flex items-center gap-2">
-                <Info size={10} className="text-gold-deep shrink-0" />
-                <p className="text-[8px] font-black uppercase tracking-widest text-gold-deep">
+              <div 
+                className="p-2 md:p-3 border rounded-lg flex items-center gap-2"
+                style={{ 
+                  backgroundColor: `${settings?.brandColors?.secondary || '#D4AF37'}1A`,
+                  borderColor: `${settings?.brandColors?.secondary || '#D4AF37'}33`
+                }}
+              >
+                <Info size={10} style={{ color: settings?.brandColors?.secondary || '#D4AF37' }} className="shrink-0" />
+                <p 
+                  className="text-[8px] font-black uppercase tracking-widest"
+                  style={{ color: settings?.brandColors?.secondary || '#D4AF37' }}
+                >
                   {priceMode}
                 </p>
               </div>
@@ -218,12 +326,13 @@ export default function QuotationBuilder({ isOpen, onClose, initialQuotation, op
             <div className="bg-white border border-black/5 shadow-sm flex flex-col h-full rounded-xl overflow-hidden">
               <div className="p-4 md:p-8 border-b border-black/5 flex items-center justify-between shrink-0">
                 <h3 className="text-[9px] md:text-sm font-black uppercase tracking-[0.2em] flex items-center gap-2">
-                  <Calculator size={12} className="text-gold-deep" />
+                  <Calculator size={12} style={{ color: settings?.brandColors?.secondary || '#D4AF37' }} />
                   Items
                 </h3>
                 <button 
                   onClick={() => setIsItemFinderOpen(true)}
-                  className="flex items-center gap-2 px-3 py-1.5 bg-black text-white rounded-lg font-bold text-[8px] md:text-[10px] uppercase tracking-widest"
+                  className="flex items-center gap-2 px-3 py-1.5 text-white rounded-lg font-bold text-[8px] md:text-[10px] uppercase tracking-widest hover:opacity-90 transition-all"
+                  style={{ backgroundColor: settings?.brandColors?.primary || '#000000' }}
                 >
                   <Plus size={12} /> Catalog
                 </button>
@@ -387,7 +496,15 @@ export default function QuotationBuilder({ isOpen, onClose, initialQuotation, op
         {/* Totals & Summary Panel */}
         <div className="xl:col-span-1">
           <div className="bg-white p-5 md:p-8 border border-black/5 shadow-xl flex flex-col rounded-xl">
-              <h3 className="text-[8px] font-black uppercase tracking-[0.3em] text-gold-deep mb-4 border-b border-gold-deep/20 pb-2">Financials</h3>
+              <h3 
+                className="text-[8px] font-black uppercase tracking-[0.3em] mb-4 border-b pb-2"
+                style={{ 
+                  color: settings?.brandColors?.secondary || '#D4AF37',
+                  borderColor: `${settings?.brandColors?.secondary || '#D4AF37'}33`
+                }}
+              >
+                Financials
+              </h3>
               <div className="space-y-3">
                 <div className="flex justify-between items-center text-[9px] font-bold text-gray-400 uppercase tracking-widest">
                   <span>Gross</span>
@@ -419,7 +536,7 @@ export default function QuotationBuilder({ isOpen, onClose, initialQuotation, op
 
                 <div className="pt-3 flex justify-between items-end">
                   <span className="text-[9px] font-black uppercase tracking-[0.2em] text-black">Total</span>
-                  <span className="text-xl font-black text-gold-deep leading-none">{formatCurrency(totals.grandTotal)}</span>
+                  <span className="text-xl font-black leading-none" style={{ color: settings?.brandColors?.secondary || '#D4AF37' }}>{formatCurrency(totals.grandTotal)}</span>
                 </div>
 
                 <div className="p-3 bg-bg-base border border-black/5 rounded-xl space-y-2">
@@ -440,18 +557,42 @@ export default function QuotationBuilder({ isOpen, onClose, initialQuotation, op
               </div>
 
             <div className="pt-4 flex flex-col gap-1.5">
-              <button 
-                onClick={() => handleSave(DocumentStatus.CREATED)}
-                className="w-full py-3 bg-black text-white font-black text-[9px] uppercase tracking-widest rounded-lg shadow-lg active:scale-[0.98] transition-all"
-              >
-                Create Proposal
-              </button>
-              <button 
-                onClick={() => handleSave(DocumentStatus.DRAFT)}
-                className="w-full py-2.5 border border-black text-black font-black text-[9px] uppercase tracking-widest rounded-lg"
-              >
-                Draft
-              </button>
+              {isQuickQuote ? (
+                <>
+                  <button 
+                    onClick={() => handleSave(DocumentStatus.CREATED, true)}
+                    style={{ backgroundColor: settings?.brandColors?.secondary || '#D4AF37' }}
+                    className="w-full py-3 text-white font-black text-[9px] uppercase tracking-widest rounded-lg shadow-lg active:scale-[0.98] transition-all flex items-center justify-center gap-2"
+                  >
+                    <Calendar size={12} />
+                    Schedule Event & Save
+                  </button>
+                  <button 
+                    onClick={() => handleSave(DocumentStatus.CREATED, false)}
+                    style={{ backgroundColor: settings?.brandColors?.primary || '#000000' }}
+                    className="w-full py-3 text-white font-black text-[9px] uppercase tracking-widest rounded-lg shadow-lg active:scale-[0.98] transition-all"
+                  >
+                    Create and Save Quotation
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button 
+                    onClick={() => handleSave(DocumentStatus.CREATED)}
+                    style={{ backgroundColor: settings?.brandColors?.primary || '#000000' }}
+                    className="w-full py-3 text-white font-black text-[9px] uppercase tracking-widest rounded-lg shadow-lg active:scale-[0.98] transition-all"
+                  >
+                    Create Proposal
+                  </button>
+                  <button 
+                    onClick={() => handleSave(DocumentStatus.DRAFT)}
+                    style={{ borderColor: settings?.brandColors?.primary || '#000000', color: settings?.brandColors?.primary || '#000000' }}
+                    className="w-full py-2.5 border font-black text-[9px] uppercase tracking-widest rounded-lg"
+                  >
+                    Draft
+                  </button>
+                </>
+              )}
               <button 
                 onClick={onClose}
                 className="w-full py-1 text-black/30 font-black uppercase tracking-widest text-[7px] active:text-red-500"

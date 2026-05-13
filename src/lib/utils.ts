@@ -5,12 +5,18 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
-export function formatCurrency(amount: number, currency: string = "KES") {
-  return new Intl.NumberFormat("en-KE", {
-    style: "currency",
-    currency: currency,
-    minimumFractionDigits: 0,
-  }).format(amount);
+export function formatCurrency(amount: number | null | undefined, currency: string = "KES") {
+  const safeAmount = typeof amount === 'number' ? amount : 0;
+  const safeCurrency = (currency && currency.length === 3) ? currency : "KES";
+  try {
+    return new Intl.NumberFormat("en-KE", {
+      style: "currency",
+      currency: safeCurrency,
+      minimumFractionDigits: 0,
+    }).format(safeAmount);
+  } catch (e) {
+    return `${safeCurrency} ${safeAmount.toLocaleString()}`;
+  }
 }
 
 export async function compressImage(dataUrl: string, maxWidth: number = 800, quality: number = 0.7): Promise<string> {

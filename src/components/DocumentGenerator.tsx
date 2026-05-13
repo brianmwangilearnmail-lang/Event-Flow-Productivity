@@ -6,6 +6,7 @@ import { Quotation, Invoice, Receipt, BusinessSettings } from '../types';
 import { formatCurrency } from '../lib/utils';
 import { useSupabaseQuery } from '../hooks/useSupabaseQuery';
 import { supabase } from '../lib/supabase';
+import { useSettings } from '../context/SettingsContext';
 
 interface DocumentGeneratorProps {
   type: 'Quotation' | 'Invoice' | 'Receipt';
@@ -15,8 +16,8 @@ interface DocumentGeneratorProps {
 
 export default function DocumentGenerator({ type, data, onClose }: DocumentGeneratorProps) {
   const documentRef = useRef<HTMLDivElement>(null);
-  const { data: settingsList = [], loading: loadingSettings } = useSupabaseQuery<BusinessSettings>('settings', (q) => q.select('*'), []);
-  const settings = settingsList[0] || {
+  const { settings: rawSettings } = useSettings();
+  const settings = rawSettings || {
     name: 'EventFlow Business',
     address: 'Business Address Not Set',
     phone: 'Phone Not Set',
@@ -108,7 +109,7 @@ export default function DocumentGenerator({ type, data, onClose }: DocumentGener
     pdf.save(`${type}-${(data as any).number || (data as any).id}.pdf`);
   };
 
-  if (loadingClient || loadingSettings) {
+  if (loadingClient) {
     return (
       <div className="flex flex-col items-center justify-center py-20 gap-4">
         <div className="w-12 h-12 border-4 border-black/5 border-t-gold-deep rounded-full animate-spin"></div>

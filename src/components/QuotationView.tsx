@@ -18,6 +18,8 @@ import {
   ThumbsDown,
   ChevronRight,
   ArrowLeft,
+  Zap,
+  Calendar,
   MoreHorizontal
 } from 'lucide-react';
 import { useSupabaseQuery } from '../hooks/useSupabaseQuery';
@@ -28,6 +30,8 @@ import Modal from './Modal';
 import { cn, formatCurrency } from '../lib/utils';
 import QuotationBuilder from './QuotationBuilder';
 import DocumentGenerator from './DocumentGenerator';
+import ScheduleEventModal from './ScheduleEventModal';
+import { useSettings } from '../context/SettingsContext';
 
 interface QuotationViewProps {
   onNavigate?: (view: any) => void;
@@ -35,13 +39,14 @@ interface QuotationViewProps {
 
 export default function QuotationView({ onNavigate }: QuotationViewProps) {
   const [isBuilderOpen, setIsBuilderOpen] = useState(false);
+  const [isQuickMode, setIsQuickMode] = useState(false);
+  const [isScheduleModalOpen, setIsScheduleModalOpen] = useState(false);
   const [isViewModalOpen, setIsViewModalOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedQuote, setSelectedQuote] = useState<Quotation | null>(null);
   const [statusFilter, setStatusFilter] = useState<DocumentStatus | 'All'>('All');
 
-  const { data: settingsList = [] } = useSupabaseQuery<any>('settings', (q) => q.select('*'));
-  const settings = settingsList?.[0];
+  const { settings } = useSettings();
 
   const { data: quotations = [], optimisticInsert, optimisticUpdate, optimisticDelete } = useSupabaseQuery<any>('quotations', (q) => {
     let query = q.select('*, clients(fullName), events(title)').order('id', { ascending: false });
@@ -60,12 +65,14 @@ export default function QuotationView({ onNavigate }: QuotationViewProps) {
         ...q,
         daysLeft,
         clientName: q.clients?.fullName || 'Unknown Client',
-        eventName: q.events?.title || 'Unknown Event'
+        eventName: q.events?.title || 'Tentative / No Event'
       };
     }).filter(q => {
-      const matchesSearch = q.number.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        q.clientName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        q.eventName.toLowerCase().includes(searchTerm.toLowerCase());
+      const search = searchTerm.toLowerCase();
+      const matchesSearch = 
+        (q.number?.toLowerCase() || '').includes(search) ||
+        (q.clientName?.toLowerCase() || '').includes(search) ||
+        (q.eventName?.toLowerCase() || '').includes(search);
       
       const matchesStatus = statusFilter === 'All' || q.status === statusFilter;
       
@@ -127,14 +134,23 @@ export default function QuotationView({ onNavigate }: QuotationViewProps) {
             <p className="text-[10px] text-gray-400 uppercase tracking-widest mt-1">Design & Manage proposals</p>
           </div>
         </div>
-        <button 
-          onClick={() => setIsBuilderOpen(true)}
-          style={{ backgroundColor: settings?.brandColors?.primary || '#000000' }}
-          className="flex items-center justify-center gap-2 px-6 py-3 text-white rounded-xl font-bold text-xs"
-        >
-          <Plus size={16} />
-          New Quotation
-        </button>
+        <div className="flex items-center gap-3">
+          <button 
+            onClick={() => { setIsQuickMode(true); setIsBuilderOpen(true); }}
+            className="flex items-center justify-center gap-2 px-6 py-3 bg-black text-white rounded-xl font-bold text-xs hover:bg-black/80 transition-all shadow-lg shadow-black/10"
+          >
+            <Zap size={14} className="text-yellow-400" />
+            Quick Quotation
+          </button>
+          <button 
+            onClick={() => { setIsQuickMode(false); setIsBuilderOpen(true); }}
+            style={{ backgroundColor: settings?.brandColors?.primary || '#000000' }}
+            className="flex items-center justify-center gap-2 px-6 py-3 text-white rounded-xl font-bold text-xs hover:opacity-90 transition-all shadow-lg shadow-black/10"
+          >
+            <Plus size={16} />
+            New Quotation
+          </button>
+        </div>
       </div>
 
       <div className="bg-white rounded-xl md:rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
@@ -210,10 +226,10 @@ export default function QuotationView({ onNavigate }: QuotationViewProps) {
                   </td>
                   <td className="px-6 py-5">
                     <p className="font-bold text-sm">{formatCurrency(quote.grandTotal, quote.currency)}</p>
-                    <p className="text-[10px] text-gray-400 uppercase tracking-widest mt-0.5">{quote.items.length} Items</p>
+                    <p className="text-[10px] text-gray-400 uppercase tracking-widest mt-0.5">{(quote.items || []).length} Items</p>
                   </td>
                   <td className="px-6 py-5">
-                    <p className="text-sm font-bold text-gray-700">{quote.validUntil}</p>
+                    <p className="text-sm font-bold text-gray-700">{quote.validUntil || 'N/A'}</p>
                     {quote.status !== DocumentStatus.APPROVED && quote.status !== DocumentStatus.DECLINED && (
                       <p className={cn(
                         "text-[10px] uppercase tracking-widest mt-0.5",
@@ -252,6 +268,16 @@ export default function QuotationView({ onNavigate }: QuotationViewProps) {
                   </td>
                   <td className="px-6 py-5 text-right">
                     <div className="flex items-center justify-end gap-1 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
+                      {!quote.eventId && (
+                        <button 
+                          onClick={() => { setSelectedQuote(quote); setIsScheduleModalOpen(true); }}
+                          className="flex items-center gap-1.5 px-3 py-1.5 text-gold-deep hover:bg-gold-deep/10 rounded-lg transition-all text-[10px] font-black uppercase tracking-widest"
+                          title="Schedule Event"
+                        >
+                          <Calendar size={14} />
+                          <span className="hidden lg:inline">Schedule Event</span>
+                        </button>
+                      )}
                       <button 
                         onClick={() => { setSelectedQuote(quote); setIsViewModalOpen(true); }}
                         className="flex items-center gap-1.5 px-3 py-1.5 text-black/40 hover:text-white rounded-lg transition-all text-[10px] font-black uppercase tracking-widest" 
@@ -283,7 +309,7 @@ export default function QuotationView({ onNavigate }: QuotationViewProps) {
 
         {/* Mobile Card View */}
         <div className="md:hidden divide-y divide-gray-50">
-          {quotations.map((quote: any) => (
+          {filteredQuotations.map((quote: any) => (
             <div key={quote.id} className="p-4 flex flex-col gap-3 group active:bg-gray-50 transition-colors">
               <div className="flex items-center justify-between" onClick={() => { setSelectedQuote(quote); setIsViewModalOpen(true); }}>
                 <div className="flex items-center gap-3 min-w-0">
@@ -342,9 +368,27 @@ export default function QuotationView({ onNavigate }: QuotationViewProps) {
 
       <QuotationBuilder 
         isOpen={isBuilderOpen} 
-        onClose={() => setIsBuilderOpen(false)} 
+        onClose={() => {
+          setIsBuilderOpen(false);
+          setIsQuickMode(false);
+        }} 
         optimisticInsert={optimisticInsert}
+        defaultQuickQuote={isQuickMode}
       />
+
+      {selectedQuote && (
+        <ScheduleEventModal 
+          isOpen={isScheduleModalOpen}
+          onClose={() => {
+            setIsScheduleModalOpen(false);
+            setSelectedQuote(null);
+          }}
+          quotation={selectedQuote}
+          onSuccess={() => {
+            // Success handler if needed (Supabase realtime will handle UI update)
+          }}
+        />
+      )}
 
       <Modal 
         isOpen={isViewModalOpen} 

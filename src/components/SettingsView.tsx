@@ -16,6 +16,7 @@ import { supabase } from '../lib/supabase';
 import { logActivity } from '../db';
 import { BusinessSettings } from '../types';
 import { cn, compressImage } from '../lib/utils';
+import { useSettings } from '../context/SettingsContext';
 
 const FONTS = [
   'Inter', 'Playfair Display', 'Roboto', 'Open Sans', 'Lato', 
@@ -23,8 +24,7 @@ const FONTS = [
 ];
 
 export default function SettingsView() {
-  const { data: settingsList = [] } = useSupabaseQuery<BusinessSettings>('settings', (q) => q.select('*'));
-  const settings = settingsList?.[0];
+  const { settings } = useSettings();
   const [formData, setFormData] = useState<Partial<BusinessSettings>>({
     brandColors: { primary: '#000000', secondary: '#ffffff', accent: '#B8860B' },
     documentFont: 'Inter'

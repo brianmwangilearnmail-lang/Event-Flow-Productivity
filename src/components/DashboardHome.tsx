@@ -16,6 +16,7 @@ import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
 import { formatCurrency, cn } from '../lib/utils';
 import { Client, Event, Quotation, Invoice, Payment, ActivityLog, BusinessSettings } from '../types';
+import { useSettings } from '../context/SettingsContext';
 import { 
   BarChart, 
   Bar, 
@@ -36,20 +37,19 @@ interface DashboardHomeProps {
 export default function DashboardHome({ onNavigate }: DashboardHomeProps) {
   const { user } = useAuth();
   
-  const { data: clients = [] } = useSupabaseQuery<Client>('clients', (q) => q.select('*'));
-  const { data: events = [] } = useSupabaseQuery<Event>('events', (q) => q.select('*').neq('status', 'Cancelled'));
-  const { data: quotations = [] } = useSupabaseQuery<Quotation>('quotations', (q) => q.select('*'));
-  const { data: invoices = [] } = useSupabaseQuery<Invoice>('invoices', (q) => q.select('*'));
-  const { data: payments = [] } = useSupabaseQuery<Payment>('payments', (q) => q.select('*'));
-  const { data: settingsList = [] } = useSupabaseQuery<BusinessSettings>('settings', (q) => q.select('*'));
+  const { settings } = useSettings();
+  const { data: clients = [] } = useSupabaseQuery<Pick<Client,'id'|'fullName'>>('clients', (q) => q.select('id, fullName'));
+  const { data: events = [] } = useSupabaseQuery<Pick<Event,'id'|'status'>>('events', (q) => q.select('id, status').neq('status', 'Cancelled'));
+  const { data: quotations = [] } = useSupabaseQuery<Pick<Quotation,'id'|'status'>>('quotations', (q) => q.select('id, status'));
+  const { data: invoices = [] } = useSupabaseQuery<Pick<Invoice,'id'|'grandTotal'|'amountPaid'>>('invoices', (q) => q.select('id, grandTotal, amountPaid'));
+  const { data: payments = [] } = useSupabaseQuery<Payment>('payments', (q) => q.select('id, amount, date, method, clientId'));
   const { data: recentActivity = [] } = useSupabaseQuery<ActivityLog>('activity_logs', (q) => q.select('*').order('timestamp', { ascending: false }).limit(6));
-
+  
+  const [timeRange, setTimeRange] = useState('month');
+  
   const clientCount = clients?.length || 0;
   const eventCount = events?.length || 0;
   const draftQuotes = quotations?.filter(q => q.status === 'Draft').length || 0;
-  const settings = settingsList?.[0];
-  
-  const [timeRange, setTimeRange] = useState('month');
 
   const totalOutstanding = invoices?.reduce((sum, inv) => sum + (inv.grandTotal - (inv.amountPaid || 0)), 0) || 0;
   

@@ -147,7 +147,7 @@ export default function ClientView({ onNavigate }: ClientViewProps) {
                   <td className="px-6 py-5">
                     <div className="flex items-center gap-4">
                       <div className="w-10 h-10 rounded-full bg-black flex items-center justify-center text-white font-bold text-sm">
-                        {client.fullName.charAt(0)}
+                        {client.fullName?.charAt(0) || '?'}
                       </div>
                       <div>
                         <p className="font-bold text-sm">{client.fullName}</p>
@@ -213,7 +213,7 @@ export default function ClientView({ onNavigate }: ClientViewProps) {
             <div key={client.id} className="p-4 flex items-center justify-between group active:bg-gray-50 transition-colors" onClick={() => { setSelectedClient(client); setIsProfileOpen(true); }}>
               <div className="flex items-center gap-3 min-w-0">
                 <div className="w-9 h-9 rounded-full bg-black flex items-center justify-center text-white font-bold text-xs shrink-0">
-                  {client.fullName.charAt(0)}
+                  {client.fullName?.charAt(0) || '?'}
                 </div>
                 <div className="min-w-0">
                   <p className="font-bold text-sm truncate">{client.fullName}</p>

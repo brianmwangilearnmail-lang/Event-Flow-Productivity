@@ -58,9 +58,10 @@ export default function CatalogView() {
   }, [selectedCategory]);
 
   const items = React.useMemo(() => {
+    const search = searchTerm.toLowerCase();
     return allItems.filter(i => 
-      i.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-      (i.sku && i.sku.toLowerCase().includes(searchTerm.toLowerCase()))
+      (i.name?.toLowerCase() || '').includes(search) || 
+      (i.sku?.toLowerCase() || '').includes(search)
     );
   }, [allItems, searchTerm]);
 

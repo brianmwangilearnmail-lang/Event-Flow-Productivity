@@ -18,6 +18,7 @@ import { supabase } from '../lib/supabase';
 import { cn, formatCurrency } from '../lib/utils';
 import Modal from './Modal';
 import DocumentGenerator from './DocumentGenerator';
+import { useSettings } from '../context/SettingsContext';
 
 interface ReceiptViewProps {
   onNavigate?: (view: any) => void;
@@ -29,8 +30,7 @@ export default function ReceiptView({ onNavigate }: ReceiptViewProps) {
   const [selectedReceipt, setSelectedReceipt] = useState<any | null>(null);
   const [isFormOpen, setIsFormOpen] = useState(false);
 
-  const { data: settingsList = [] } = useSupabaseQuery<any>('settings', (q) => q.select('*'));
-  const settings = settingsList?.[0];
+  const { settings } = useSettings();
 
   const { data: allReceipts = [] } = useSupabaseQuery<any>('receipts', (q) => 
     q.select('*, clients(fullName), events(title)').order('id', { ascending: false })
@@ -41,10 +41,11 @@ export default function ReceiptView({ onNavigate }: ReceiptViewProps) {
       ...r,
       clientName: r.clients?.fullName || 'Unknown Client',
       eventName: r.events?.title || 'Unknown Event'
-    })).filter(r => 
-      r.number.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      r.clientName.toLowerCase().includes(searchTerm.toLowerCase())
-    );
+    })).filter(r => {
+      const search = searchTerm.toLowerCase();
+      return (r.number?.toLowerCase() || '').includes(search) ||
+             (r.clientName?.toLowerCase() || '').includes(search);
+    });
   }, [allReceipts, searchTerm]);
 
   return (

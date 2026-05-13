@@ -19,7 +19,11 @@ export default function EventManager({ eventId, onBack, onNavigate }: EventManag
   const { data: quotations = [] } = useSupabaseQuery<Quotation>('quotations', (q) => q.select('*').eq('eventId', eventId), [eventId]);
   
   // Find the latest approved or sent quote
-  const activeQuote = quotations.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0];
+  const activeQuote = [...quotations].sort((a, b) => {
+    const timeA = a.date ? new Date(a.date).getTime() : 0;
+    const timeB = b.date ? new Date(b.date).getTime() : 0;
+    return timeB - timeA;
+  })[0];
 
   const [verifiedItems, setVerifiedItems] = useState<Record<number, boolean>>({});
   const [additionalItems, setAdditionalItems] = useState<QuotationLineItem[]>([]);
@@ -101,7 +105,7 @@ export default function EventManager({ eventId, onBack, onNavigate }: EventManag
     setIsGeneratingInvoice(true);
     
     const allItems = [...additionalItems];
-    const subtotal = allItems.reduce((sum, item) => sum + (item.quantity * item.unitPrice) - item.discount, 0);
+    const subtotal = allItems.reduce((sum, item) => sum + (item.quantity * item.unitPrice) - (item.discount || 0), 0);
     const taxTotal = subtotal * 0.16; // Example 16% VAT, can be fetched from settings
     const grandTotal = subtotal + taxTotal;
 

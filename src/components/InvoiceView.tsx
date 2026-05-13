@@ -27,6 +27,7 @@ import ReceiptForm from './ReceiptForm';
 import InvoiceForm from './InvoiceForm';
 import DocumentGenerator from './DocumentGenerator';
 import Modal from './Modal';
+import { useSettings } from '../context/SettingsContext';
 
 interface InvoiceViewProps {
   onNavigate?: (view: any) => void;
@@ -44,8 +45,7 @@ export default function InvoiceView({ onNavigate }: InvoiceViewProps) {
   const [invoiceToDelete, setInvoiceToDelete] = useState<Invoice | null>(null);
   const [deleteReason, setDeleteReason] = useState("");
 
-  const { data: settingsList = [] } = useSupabaseQuery<any>('settings', (q) => q.select('*'));
-  const settings = settingsList?.[0];
+  const { settings } = useSettings();
 
   const { data: invoices = [], loading, error, optimisticInsert, optimisticUpdate, optimisticDelete } = useSupabaseQuery<any>('invoices', (q) => {
     let query = q.select('*, clients(fullName), events(title)').order('id', { ascending: false });
@@ -58,8 +58,10 @@ export default function InvoiceView({ onNavigate }: InvoiceViewProps) {
       clientName: i.clients?.fullName || 'Unknown Client',
       eventName: i.events?.title || 'Unknown Event'
     })).filter(i => {
-      const matchesSearch = i.number.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        i.clientName.toLowerCase().includes(searchTerm.toLowerCase());
+      const search = searchTerm.toLowerCase();
+      const matchesSearch = 
+        (i.number?.toLowerCase() || '').includes(search) ||
+        (i.clientName?.toLowerCase() || '').includes(search);
       
       const matchesStatus = statusFilter === 'All' || i.status === statusFilter;
       
@@ -436,10 +438,11 @@ export default function InvoiceView({ onNavigate }: InvoiceViewProps) {
               />
             </div>
             <div className="grid grid-cols-1 gap-2 max-h-[60vh] overflow-y-auto pr-2">
-              {clients.filter(c => 
-                c.fullName.toLowerCase().includes(clientSearchTerm.toLowerCase()) ||
-                c.phone.includes(clientSearchTerm)
-              ).map(client => (
+              {clients.filter(c => {
+                const search = clientSearchTerm.toLowerCase();
+                return (c.fullName?.toLowerCase() || '').includes(search) ||
+                       (c.phone || '').includes(clientSearchTerm);
+              }).map(client => (
                 <button 
                   key={client.id}
                   onClick={() => setSelectedClient(client)}

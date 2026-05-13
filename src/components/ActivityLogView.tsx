@@ -33,8 +33,11 @@ export default function ActivityLogView() {
   , []);
 
   const filteredLogs = logs.filter(log => {
-    const matchesSearch = log.description.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                         log.actionType.toLowerCase().includes(searchTerm.toLowerCase());
+    const search = searchTerm.toLowerCase();
+    const matchesSearch = 
+      (log.description?.toLowerCase() || '').includes(search) || 
+      (log.actionType?.toLowerCase() || '').includes(search);
+    
     const matchesFilter = filterType === 'All' || log.linkedType === filterType;
     return matchesSearch && matchesFilter;
   });

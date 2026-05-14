@@ -38,6 +38,29 @@ export default function DocumentGenerator({ type, data, onClose }: DocumentGener
   }, [eventId]);
   const event = eventList[0];
 
+  const [editableData, setEditableData] = React.useState<any>(data);
+  const [editableSettings, setEditableSettings] = React.useState<any>(settings);
+  const [editableClient, setEditableClient] = React.useState<any>(null);
+  const [editableEvent, setEditableEvent] = React.useState<any>(null);
+  const [hasChanges, setHasChanges] = React.useState(false);
+  const [isSaving, setIsSaving] = React.useState(false);
+
+  React.useEffect(() => {
+    setEditableData(data);
+  }, [data]);
+
+  React.useEffect(() => {
+    setEditableSettings(settings);
+  }, [rawSettings]); // Use rawSettings to detect changes from context
+
+  React.useEffect(() => {
+    if (client) setEditableClient(client);
+  }, [client]);
+
+  React.useEffect(() => {
+    if (event) setEditableEvent(event);
+  }, [event]);
+
   const [invoice, setInvoice] = React.useState<any>(null);
   React.useEffect(() => {
     const fetchInvoice = async () => {
@@ -51,6 +74,63 @@ export default function DocumentGenerator({ type, data, onClose }: DocumentGener
     };
     fetchInvoice();
   }, [type, (data as any).paymentId]);
+
+  const handleUpdate = (type: 'data' | 'settings' | 'client' | 'event', field: string, value: any) => {
+    setHasChanges(true);
+    if (type === 'data') setEditableData({ ...editableData, [field]: value });
+    if (type === 'settings') setEditableSettings({ ...editableSettings, [field]: value });
+    if (type === 'client') setEditableClient({ ...editableClient, [field]: value });
+    if (type === 'event') setEditableEvent({ ...editableEvent, [field]: value });
+  };
+
+  const handleSaveAll = async () => {
+    setIsSaving(true);
+    try {
+      // 1. Save Document Meta
+      const table = type === 'Quotation' ? 'quotations' : type === 'Invoice' ? 'invoices' : 'receipts';
+      const docUpdate: any = {
+        number: editableData.number,
+        date: editableData.date || editableData.issueDate,
+      };
+      if (type === 'Invoice') docUpdate.issueDate = editableData.date || editableData.issueDate;
+      
+      await supabase.from(table).update(docUpdate).eq('id', editableData.id);
+
+      // 2. Save Business Settings (if changed)
+      if (JSON.stringify(editableSettings) !== JSON.stringify(settings)) {
+        await supabase.from('settings').update({
+          name: editableSettings.name,
+          address: editableSettings.address,
+          phone: editableSettings.phone,
+          email: editableSettings.email,
+          paymentInstructions: editableSettings.paymentInstructions,
+          terms: editableSettings.terms,
+          footerText: editableSettings.footerText,
+          bankName: editableSettings.bankName,
+          accountName: editableSettings.accountName,
+          accountNumber: editableSettings.accountNumber,
+          swiftCode: editableSettings.swiftCode
+        }).eq('id', settings.id);
+      }
+
+      // 3. Save Client Info
+      if (editableClient) {
+        await supabase.from('clients').update({ fullName: editableClient.fullName }).eq('id', editableClient.id);
+      }
+
+      // 4. Save Event Info
+      if (editableEvent) {
+        await supabase.from('events').update({ title: editableEvent.title }).eq('id', editableEvent.id);
+      }
+
+      setHasChanges(false);
+      alert('Changes saved successfully!');
+    } catch (err: any) {
+      alert('Error saving changes: ' + err.message);
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
   const handleDownloadPDF = async () => {
     if (!documentRef.current) return;
@@ -142,10 +222,19 @@ export default function DocumentGenerator({ type, data, onClose }: DocumentGener
           </div>
         </div>
         <div className="flex gap-1.5 flex-nowrap justify-end">
+          {hasChanges && (
+            <button
+              onClick={handleSaveAll}
+              disabled={isSaving}
+              className="flex items-center justify-center gap-1.5 px-4 py-2.5 md:px-5 md:py-2 bg-green-600 text-white text-[8px] font-black uppercase tracking-widest hover:bg-green-700 transition-all shadow-xl shadow-green-900/20 rounded-xl"
+            >
+              {isSaving ? 'Saving...' : 'Save Changes'}
+            </button>
+          )}
           <button
             onClick={() => {
-              const body = `Hi ${client.fullName},\n\nPlease find the ${type} attached.\n\nThank you for choosing ${settings.name}.`;
-              window.open(`mailto:${client.email}?subject=${type}&body=${encodeURIComponent(body)}`);
+              const body = `Hi ${editableClient?.fullName || client.fullName},\n\nPlease find the ${type} attached.\n\nThank you for choosing ${editableSettings.name}.`;
+              window.open(`mailto:${editableClient?.email || client.email}?subject=${type}&body=${encodeURIComponent(body)}`);
             }}
             className="flex items-center justify-center gap-1.5 p-2.5 md:px-3 md:py-2 border border-black/5 text-[8px] font-black uppercase tracking-widest hover:bg-bg-base transition-all rounded-xl"
             title="Share via Email"
@@ -192,11 +281,34 @@ export default function DocumentGenerator({ type, data, onClose }: DocumentGener
               {settings.logoUrl ? (
                 <img src={settings.logoUrl} alt="Company Logo" className="h-7 sm:h-14 object-contain grayscale" />
               ) : (
-                <div className="text-lg sm:text-3xl font-serif font-black tracking-tighter italic" style={{ color: settings.brandColors?.secondary || '#B8860B' }}>{settings.name || 'EventFlow'}</div>
+                <input 
+                  value={editableSettings.name}
+                  onChange={(e) => handleUpdate('settings', 'name', e.target.value)}
+                  className="text-lg sm:text-3xl font-serif font-black tracking-tighter italic bg-transparent border-none outline-none p-0 w-full focus:ring-1 focus:ring-black/5 rounded"
+                  style={{ color: settings.brandColors?.secondary || '#B8860B' }}
+                />
               )}
               <div className="text-[8px] sm:text-[10px] uppercase font-bold tracking-[0.2em] text-black/40 leading-relaxed max-w-[240px]">
-                <p className="border-l pl-3" style={{ borderColor: settings.brandColors?.secondary || '#B8860B' }}>{settings.address}</p>
-                <p className="border-l pl-3 mt-1.5" style={{ borderColor: settings.brandColors?.secondary || '#B8860B' }}>{settings.phone} • {settings.email}</p>
+                <textarea 
+                  value={editableSettings.address}
+                  onChange={(e) => handleUpdate('settings', 'address', e.target.value)}
+                  className="border-l pl-3 bg-transparent border-none outline-none p-0 w-full resize-none h-auto focus:ring-1 focus:ring-black/5 rounded"
+                  style={{ borderColor: settings.brandColors?.secondary || '#B8860B' }}
+                  rows={2}
+                />
+                <div className="border-l pl-3 mt-1.5 flex items-center gap-1" style={{ borderColor: settings.brandColors?.secondary || '#B8860B' }}>
+                  <input 
+                    value={editableSettings.phone}
+                    onChange={(e) => handleUpdate('settings', 'phone', e.target.value)}
+                    className="bg-transparent border-none outline-none p-0 w-24 focus:ring-1 focus:ring-black/5 rounded"
+                  />
+                  <span>•</span>
+                  <input 
+                    value={editableSettings.email}
+                    onChange={(e) => handleUpdate('settings', 'email', e.target.value)}
+                    className="bg-transparent border-none outline-none p-0 w-full focus:ring-1 focus:ring-black/5 rounded"
+                  />
+                </div>
               </div>
             </div>
             <div className="text-left sm:text-right uppercase">
@@ -204,11 +316,20 @@ export default function DocumentGenerator({ type, data, onClose }: DocumentGener
               <div className="mt-2 sm:mt-5 space-y-1.5">
                 <div className="flex flex-col sm:items-end">
                   <span className="text-[7px] sm:text-[9px] font-black tracking-[0.3em]" style={{ color: settings.brandColors?.secondary || '#B8860B' }}>Serial Number</span>
-                  <span className="text-[9px] sm:text-xs font-bold tracking-tight">{(data as any).number}</span>
+                  <input 
+                    value={editableData.number}
+                    onChange={(e) => handleUpdate('data', 'number', e.target.value)}
+                    className="text-[9px] sm:text-xs font-bold tracking-tight bg-transparent border-none outline-none p-0 text-left sm:text-right w-full focus:ring-1 focus:ring-black/5 rounded"
+                  />
                 </div>
                 <div className="flex flex-col sm:items-end mt-1">
                   <span className="text-[7px] sm:text-[9px] font-black text-black/20 tracking-[0.3em]">Issue Date</span>
-                  <span className="text-[9px] sm:text-xs font-bold">{(data as any).date || (data as any).issueDate}</span>
+                  <input 
+                    type="date"
+                    value={editableData.date || editableData.issueDate}
+                    onChange={(e) => handleUpdate('data', editableData.date ? 'date' : 'issueDate', e.target.value)}
+                    className="text-[9px] sm:text-xs font-bold bg-transparent border-none outline-none p-0 text-left sm:text-right focus:ring-1 focus:ring-black/5 rounded"
+                  />
                 </div>
               </div>
             </div>
@@ -219,7 +340,11 @@ export default function DocumentGenerator({ type, data, onClose }: DocumentGener
             <div className="space-y-2 sm:space-y-4">
               <h4 className="text-[7px] sm:text-[9px] font-black uppercase tracking-[0.3em] border-b border-black/5 pb-1.5" style={{ color: settings.brandColors?.secondary || '#B8860B' }}>Target</h4>
               <div className="space-y-0.5">
-                <p className="font-serif text-sm sm:text-xl italic text-black font-black leading-tight">{client.fullName}</p>
+                <input 
+                  value={editableClient?.fullName || ''}
+                  onChange={(e) => handleUpdate('client', 'fullName', e.target.value)}
+                  className="font-serif text-sm sm:text-xl italic text-black font-black leading-tight bg-transparent border-none outline-none p-0 w-full focus:ring-1 focus:ring-black/5 rounded"
+                />
                 {client.companyName && <p className="text-[7px] sm:text-[9px] text-black/40 font-bold uppercase tracking-widest">{client.companyName}</p>}
               </div>
             </div>
@@ -227,7 +352,11 @@ export default function DocumentGenerator({ type, data, onClose }: DocumentGener
               <div className="space-y-2 sm:space-y-4">
                 <h4 className="text-[7px] sm:text-[9px] font-black uppercase tracking-[0.3em] border-b border-black/5 pb-1.5" style={{ color: settings.brandColors?.secondary || '#B8860B' }}>Scope</h4>
                 <div className="space-y-0.5">
-                  <p className="font-serif text-sm sm:text-xl italic text-black font-black leading-tight">{event.title}</p>
+                  <input 
+                    value={editableEvent?.title || ''}
+                    onChange={(e) => handleUpdate('event', 'title', e.target.value)}
+                    className="font-serif text-sm sm:text-xl italic text-black font-black leading-tight bg-transparent border-none outline-none p-0 w-full focus:ring-1 focus:ring-black/5 rounded"
+                  />
                   <p className="text-[7px] sm:text-[9px] text-black/40 font-bold uppercase tracking-widest">{event.type} • {event.date}</p>
                 </div>
               </div>
@@ -308,17 +437,46 @@ export default function DocumentGenerator({ type, data, onClose }: DocumentGener
               <div className="space-y-3 sm:space-y-5">
                 <h4 className="text-[8px] font-black uppercase tracking-[0.4em] italic" style={{ color: settings.brandColors?.secondary || '#B8860B' }}>Settlement Policy & Bank Details</h4>
                 <div className="space-y-3">
-                  <p className="text-[9px] text-black/40 leading-loose font-bold whitespace-pre-wrap">
-                    {settings.paymentInstructions}
-                  </p>
+                  <textarea 
+                    value={editableSettings.paymentInstructions}
+                    onChange={(e) => handleUpdate('settings', 'paymentInstructions', e.target.value)}
+                    className="text-[9px] text-black/40 leading-loose font-bold whitespace-pre-wrap bg-transparent border-none outline-none p-0 w-full resize-none h-auto focus:ring-1 focus:ring-black/5 rounded"
+                    rows={4}
+                  />
                   {(settings.bankName || settings.accountNumber) && (
                     <div className="p-4 border-l-2 space-y-1 mt-2" style={{ backgroundColor: `${settings.brandColors?.accent || '#fdfbf7'}80`, borderColor: `${settings.brandColors?.secondary || '#B8860B'}33` }}>
                       <p className="text-[7px] uppercase font-black tracking-widest text-black/20">Official Bank Account</p>
                       <div className="grid grid-cols-1 gap-1">
-                        {settings.bankName && <p className="text-[9px] font-black text-black/60 uppercase tracking-tight">{settings.bankName}</p>}
-                        {settings.accountName && <p className="text-[9px] font-bold text-black/40">Name: {settings.accountName}</p>}
-                        {settings.accountNumber && <p className="text-[9px] font-bold text-black/40">Acc: {settings.accountNumber}</p>}
-                        {settings.swiftCode && <p className="text-[9px] font-bold text-black/40">SWIFT: {settings.swiftCode}</p>}
+                        <input 
+                          value={editableSettings.bankName || ''}
+                          onChange={(e) => handleUpdate('settings', 'bankName', e.target.value)}
+                          className="text-[9px] font-black text-black/60 uppercase tracking-tight bg-transparent border-none outline-none p-0 w-full focus:ring-1 focus:ring-black/5 rounded"
+                          placeholder="Bank Name"
+                        />
+                        <div className="flex items-center gap-1">
+                          <span className="text-[9px] font-bold text-black/40 whitespace-nowrap">Name:</span>
+                          <input 
+                            value={editableSettings.accountName || ''}
+                            onChange={(e) => handleUpdate('settings', 'accountName', e.target.value)}
+                            className="text-[9px] font-bold text-black/40 bg-transparent border-none outline-none p-0 w-full focus:ring-1 focus:ring-black/5 rounded"
+                          />
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <span className="text-[9px] font-bold text-black/40 whitespace-nowrap">Acc:</span>
+                          <input 
+                            value={editableSettings.accountNumber || ''}
+                            onChange={(e) => handleUpdate('settings', 'accountNumber', e.target.value)}
+                            className="text-[9px] font-bold text-black/40 bg-transparent border-none outline-none p-0 w-full focus:ring-1 focus:ring-black/5 rounded"
+                          />
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <span className="text-[9px] font-bold text-black/40 whitespace-nowrap">SWIFT:</span>
+                          <input 
+                            value={editableSettings.swiftCode || ''}
+                            onChange={(e) => handleUpdate('settings', 'swiftCode', e.target.value)}
+                            className="text-[9px] font-bold text-black/40 bg-transparent border-none outline-none p-0 w-full focus:ring-1 focus:ring-black/5 rounded"
+                          />
+                        </div>
                       </div>
                     </div>
                   )}
@@ -326,15 +484,22 @@ export default function DocumentGenerator({ type, data, onClose }: DocumentGener
               </div>
               <div className="space-y-3 sm:space-y-5">
                 <h4 className="text-[8px] font-black uppercase tracking-[0.4em] italic" style={{ color: settings.brandColors?.secondary || '#B8860B' }}>Legal & Engagement Clauses</h4>
-                <p className="text-[9px] text-black/40 leading-loose font-medium whitespace-pre-wrap">
-                  {settings.terms}
-                </p>
+                <textarea 
+                  value={editableSettings.terms}
+                  onChange={(e) => handleUpdate('settings', 'terms', e.target.value)}
+                  className="text-[9px] text-black/40 leading-loose font-medium whitespace-pre-wrap bg-transparent border-none outline-none p-0 w-full resize-none h-auto focus:ring-1 focus:ring-black/5 rounded"
+                  rows={6}
+                />
               </div>
             </div>
             <div className="mt-10 sm:mt-16 text-center">
               <div className="w-12 h-0.5 mx-auto mb-4" style={{ backgroundColor: `${settings.brandColors?.secondary || '#B8860B'}33` }}></div>
               <p className="text-[8px] uppercase font-black tracking-[0.5em] text-black/20 italic">
-                {settings.footerText || `Thank you for your valued patronage • ${settings.name}`}
+                <input 
+                  value={editableSettings.footerText || `Thank you for your valued patronage • ${editableSettings.name}`}
+                  onChange={(e) => handleUpdate('settings', 'footerText', e.target.value)}
+                  className="bg-transparent border-none outline-none p-0 w-full text-center focus:ring-1 focus:ring-black/5 rounded"
+                />
               </p>
             </div>
           </div>

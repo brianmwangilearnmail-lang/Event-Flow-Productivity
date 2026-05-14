@@ -60,6 +60,7 @@ export default function SettingsView() {
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     let error;
+    
     if (settings?.id) {
       const res = await supabase.from('settings').update(formData).eq('id', settings.id);
       error = res.error;

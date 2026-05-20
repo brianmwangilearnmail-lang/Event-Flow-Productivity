@@ -45,9 +45,33 @@ export default function DocumentGenerator({ type, data, onClose }: DocumentGener
   const [hasChanges, setHasChanges] = React.useState(false);
   const [isSaving, setIsSaving] = React.useState(false);
 
+  // Editable Items and Transport/Labour
+  const [lineItems, setLineItems] = React.useState<any[]>([]);
+  const [transportPrice, setTransportPrice] = React.useState(0);
+  const [laborPrice, setLaborPrice] = React.useState(0);
+  const [laborStaffCount, setLaborStaffCount] = React.useState(0);
+
   React.useEffect(() => {
-    setEditableData(data);
-  }, [data]);
+    if (data) {
+      setEditableData(data);
+      if (type === 'Quotation') {
+        const rawItems = (data as Quotation).items || [];
+        const transportItem = rawItems.find(item => item.category === 'Transport');
+        const laborItem = rawItems.find(item => item.category === 'Labour');
+        
+        setTransportPrice(transportItem ? transportItem.unitPrice : 0);
+        setLaborPrice(laborItem ? laborItem.unitPrice : 0);
+        setLaborStaffCount(laborItem ? laborItem.quantity : 0);
+        
+        const filteredItems = rawItems.filter(
+          item => item.category !== 'Transport' && item.category !== 'Labour'
+        );
+        setLineItems(filteredItems);
+      } else {
+        setLineItems((data as any).items || []);
+      }
+    }
+  }, [data, type]);
 
   React.useEffect(() => {
     setEditableSettings(settings);
@@ -75,6 +99,41 @@ export default function DocumentGenerator({ type, data, onClose }: DocumentGener
     fetchInvoice();
   }, [type, (data as any).paymentId]);
 
+  const totals = React.useMemo(() => {
+    if (type === 'Quotation') {
+      const itemsSubtotal = lineItems.reduce((sum, item) => sum + (item.quantity * item.unitPrice * (1 - (item.discount || 0)/100)), 0);
+      const transportCost = transportPrice;
+      const laborCost = laborPrice * laborStaffCount;
+      const subtotal = itemsSubtotal + transportCost + laborCost;
+      
+      const globalDiscount = editableData.globalDiscount || 0;
+      const discountAmount = subtotal * (globalDiscount / 100);
+      const subtotalAfterDiscount = subtotal - discountAmount;
+      
+      const taxRate = editableData.taxRate !== undefined ? editableData.taxRate : (rawSettings?.taxRate || 0);
+      const taxTotal = subtotalAfterDiscount * (taxRate / 100);
+      const grandTotal = subtotalAfterDiscount + taxTotal;
+      
+      return {
+        subtotal,
+        discountAmount,
+        taxTotal,
+        grandTotal,
+        taxRate
+      };
+    } else {
+      const subtotal = lineItems.reduce((sum, item) => sum + (item.quantity * item.unitPrice * (1 - (item.discount || 0)/100)), 0);
+      const grandTotal = subtotal;
+      return {
+        subtotal,
+        discountAmount: 0,
+        taxTotal: 0,
+        grandTotal,
+        taxRate: 0
+      };
+    }
+  }, [type, lineItems, transportPrice, laborPrice, laborStaffCount, editableData.globalDiscount, editableData.taxRate, rawSettings?.taxRate]);
+
   const handleUpdate = (type: 'data' | 'settings' | 'client' | 'event', field: string, value: any) => {
     setHasChanges(true);
     if (type === 'data') setEditableData({ ...editableData, [field]: value });
@@ -93,6 +152,40 @@ export default function DocumentGenerator({ type, data, onClose }: DocumentGener
         date: editableData.date || editableData.issueDate,
       };
       if (type === 'Invoice') docUpdate.issueDate = editableData.date || editableData.issueDate;
+      
+      if (type === 'Quotation') {
+        const finalItems = [...lineItems];
+        if (transportPrice > 0) {
+          finalItems.push({
+            name: 'Transport Fee',
+            description: 'Transport & Logistics charges',
+            category: 'Transport',
+            quantity: 1,
+            unit: 'Trip',
+            unitPrice: transportPrice,
+            discount: 0
+          });
+        }
+        if (laborPrice > 0 && laborStaffCount > 0) {
+          finalItems.push({
+            name: 'Labour charges',
+            description: `Labour for ${laborStaffCount} staff members`,
+            category: 'Labour',
+            quantity: laborStaffCount,
+            unit: 'Pax',
+            unitPrice: laborPrice,
+            discount: 0
+          });
+        }
+        
+        docUpdate.items = finalItems;
+        docUpdate.subtotal = totals.subtotal;
+        docUpdate.discountTotal = totals.discountAmount;
+        docUpdate.globalDiscount = editableData.globalDiscount || 0;
+        docUpdate.taxTotal = totals.taxTotal;
+        docUpdate.grandTotal = totals.grandTotal;
+        docUpdate.depositRequired = editableData.depositRequired || 0;
+      }
       
       await supabase.from(table).update(docUpdate).eq('id', editableData.id);
 
@@ -147,6 +240,12 @@ export default function DocumentGenerator({ type, data, onClose }: DocumentGener
     const imgData = await toPng(el, {
       pixelRatio: 2,
       backgroundColor: '#FFFFFF',
+      filter: (node: any) => {
+        if (node.classList && node.classList.contains('no-print')) {
+          return false;
+        }
+        return true;
+      }
     });
 
     el.setAttribute('style', prevStyle);
@@ -209,6 +308,13 @@ export default function DocumentGenerator({ type, data, onClose }: DocumentGener
 
   return (
     <div className="flex flex-col gap-3 max-h-[92vh] md:max-h-[90vh]">
+      <style dangerouslySetInnerHTML={{__html: `
+        @media print {
+          .no-print {
+            display: none !important;
+          }
+        }
+      `}} />
 
       {/* Action Bar */}
       <div className="flex items-center justify-between px-1 flex-nowrap gap-3">
@@ -383,6 +489,132 @@ export default function DocumentGenerator({ type, data, onClose }: DocumentGener
                     <td className="py-3 px-2 sm:py-5 sm:px-3 text-center text-[9px] sm:text-xs font-bold">1</td>
                     <td className="py-3 px-2 sm:py-5 sm:px-3 text-right text-[9px] sm:text-base font-serif italic">{formatCurrency((data as any).amount)}</td>
                   </tr>
+                ) : type === 'Quotation' ? (
+                  <>
+                    {lineItems.map((item: any, i: number) => (
+                      <tr key={i} className="group hover:bg-gray-50/50 relative">
+                        <td className="py-2 px-2 sm:py-3 sm:px-3">
+                          <input 
+                            value={item.name}
+                            onChange={(e) => {
+                              const updated = [...lineItems];
+                              updated[i] = { ...updated[i], name: e.target.value };
+                              setLineItems(updated);
+                              setHasChanges(true);
+                            }}
+                            className="w-full text-[9px] sm:text-sm font-bold uppercase tracking-tight bg-transparent border-none outline-none p-0 focus:ring-1 focus:ring-black/5 rounded focus:text-gold-deep"
+                            placeholder="Item Name"
+                          />
+                          <input 
+                            value={item.description || ''}
+                            onChange={(e) => {
+                              const updated = [...lineItems];
+                              updated[i] = { ...updated[i], description: e.target.value };
+                              setLineItems(updated);
+                              setHasChanges(true);
+                            }}
+                            className="w-full text-[7px] sm:text-[9px] text-black/30 mt-0.5 uppercase leading-relaxed bg-transparent border-none outline-none p-0 focus:ring-1 focus:ring-black/5 rounded focus:text-black"
+                            placeholder="Add brief description..."
+                          />
+                        </td>
+                        <td className="py-2 px-2 sm:py-3 sm:px-3 text-center w-16">
+                          <input 
+                            type="number"
+                            value={item.quantity}
+                            onChange={(e) => {
+                              const updated = [...lineItems];
+                              updated[i] = { ...updated[i], quantity: Number(e.target.value) };
+                              setLineItems(updated);
+                              setHasChanges(true);
+                            }}
+                            className="w-full text-center text-[9px] sm:text-xs font-bold bg-transparent border-none outline-none p-0 focus:ring-1 focus:ring-black/5 rounded"
+                          />
+                        </td>
+                        <td className="py-2 px-2 sm:py-3 sm:px-3 text-right w-24">
+                          <div className="flex items-center justify-end gap-1">
+                            <input 
+                              type="number"
+                              value={item.unitPrice}
+                              onChange={(e) => {
+                                const updated = [...lineItems];
+                                updated[i] = { ...updated[i], unitPrice: Number(e.target.value) };
+                                setLineItems(updated);
+                                setHasChanges(true);
+                              }}
+                              className="w-full text-right text-[9px] sm:text-base font-serif italic bg-transparent border-none outline-none p-0 focus:ring-1 focus:ring-black/5 rounded focus:text-gold-deep"
+                            />
+                            <button
+                              onClick={() => {
+                                setLineItems(lineItems.filter((_, idx) => idx !== i));
+                                setHasChanges(true);
+                              }}
+                              className="p-1 text-red-500 hover:bg-red-50 rounded opacity-0 group-hover:opacity-100 transition-opacity no-print"
+                              title="Delete Item"
+                            >
+                              <span className="text-xs">✕</span>
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                    {/* Transport Cost Row */}
+                    <tr className="bg-bg-base/20 border-t border-black/5">
+                      <td className="py-2 px-2 sm:py-3 sm:px-3">
+                        <p className="text-[9px] sm:text-sm font-bold uppercase tracking-tight text-black/50">Transport & Logistics</p>
+                        <p className="text-[7px] sm:text-[9px] text-black/30 mt-0.5 uppercase">Transport fee for event</p>
+                      </td>
+                      <td className="py-2 px-2 sm:py-3 sm:px-3 text-center text-[9px] sm:text-xs font-bold text-black/40">1</td>
+                      <td className="py-2 px-2 sm:py-3 sm:px-3 text-right">
+                        <input 
+                          type="number"
+                          value={transportPrice}
+                          onChange={(e) => {
+                            setTransportPrice(Number(e.target.value));
+                            setHasChanges(true);
+                          }}
+                          className="w-full text-right text-[9px] sm:text-base font-serif italic bg-transparent border-none outline-none p-0 focus:ring-1 focus:ring-black/5 rounded"
+                          placeholder="0"
+                        />
+                      </td>
+                    </tr>
+                    {/* Labour Row */}
+                    <tr className="bg-bg-base/20 border-t border-black/5">
+                      <td className="py-2 px-2 sm:py-3 sm:px-3">
+                        <p className="text-[9px] sm:text-sm font-bold uppercase tracking-tight text-black/50">Labour charges</p>
+                        <p className="text-[7px] sm:text-[9px] text-black/30 mt-0.5 uppercase">Staffing for execution</p>
+                      </td>
+                      <td className="py-2 px-2 sm:py-3 sm:px-3 text-center">
+                        <div className="flex items-center justify-center gap-0.5">
+                          <input 
+                            type="number"
+                            value={laborStaffCount}
+                            onChange={(e) => {
+                              setLaborStaffCount(Number(e.target.value));
+                              setHasChanges(true);
+                            }}
+                            className="w-8 text-center text-[9px] sm:text-xs font-bold bg-transparent border-none outline-none p-0 focus:ring-1 focus:ring-black/5 rounded"
+                            placeholder="0"
+                          />
+                          <span className="text-[6px] sm:text-[8px] text-black/30 uppercase font-black">Pax</span>
+                        </div>
+                      </td>
+                      <td className="py-2 px-2 sm:py-3 sm:px-3 text-right">
+                        <div className="flex items-center justify-end gap-1">
+                          <span className="text-[6px] sm:text-[8px] text-black/30 uppercase font-black whitespace-nowrap">Rate:</span>
+                          <input 
+                            type="number"
+                            value={laborPrice}
+                            onChange={(e) => {
+                              setLaborPrice(Number(e.target.value));
+                              setHasChanges(true);
+                            }}
+                            className="w-16 text-right text-[9px] sm:text-base font-serif italic bg-transparent border-none outline-none p-0 focus:ring-1 focus:ring-black/5 rounded"
+                            placeholder="0"
+                          />
+                        </div>
+                      </td>
+                    </tr>
+                  </>
                 ) : (
                   ((data as any).items || []).map((item: any, i: number) => (
                     <tr key={i}>
@@ -397,6 +629,28 @@ export default function DocumentGenerator({ type, data, onClose }: DocumentGener
                 )}
               </tbody>
             </table>
+            {type === 'Quotation' && (
+              <div className="mt-3 flex justify-start no-print">
+                <button
+                  onClick={() => {
+                    const newCustomItem = {
+                      name: 'New Custom Item',
+                      description: '',
+                      category: 'Custom',
+                      quantity: 1,
+                      unit: 'pcs',
+                      unitPrice: 0,
+                      discount: 0
+                    };
+                    setLineItems([...lineItems, newCustomItem]);
+                    setHasChanges(true);
+                  }}
+                  className="flex items-center gap-1 px-2.5 py-1.5 border border-black/5 hover:border-black text-black/50 hover:text-black rounded-lg font-bold text-[8px] sm:text-[9px] uppercase tracking-widest transition-all bg-white shadow-sm"
+                >
+                  + Custom Item
+                </button>
+              </div>
+            )}
           </div>
 
           {/* Totals */}
@@ -414,18 +668,46 @@ export default function DocumentGenerator({ type, data, onClose }: DocumentGener
                   </div>
                 </>
               )}
-              {type !== 'Receipt' && (
+              {type === 'Quotation' ? (
+                <>
+                  <div className="flex justify-between text-[7px] sm:text-[9px] uppercase font-bold tracking-widest border-b border-black/5 pb-1.5 items-center">
+                    <span className="text-black/30">Subtotal</span>
+                    <span className="text-black">{formatCurrency(totals.subtotal)}</span>
+                  </div>
+                  <div className="flex justify-between text-[7px] sm:text-[9px] uppercase font-bold tracking-widest border-b border-black/5 pb-1.5 items-center">
+                    <span className="text-black/30">Rebate (%)</span>
+                    <input 
+                      type="number"
+                      value={editableData.globalDiscount || 0}
+                      onChange={(e) => {
+                        handleUpdate('data', 'globalDiscount', Number(e.target.value));
+                      }}
+                      className="w-12 text-right bg-transparent border-none outline-none font-bold p-0 focus:ring-1 focus:ring-black/5 rounded"
+                    />
+                  </div>
+                  {totals.discountAmount > 0 && (
+                    <div className="flex justify-between text-[7px] sm:text-[9px] uppercase font-bold tracking-widest border-b border-black/5 pb-1.5 items-center text-red-500">
+                      <span>Discount Amt</span>
+                      <span>-{formatCurrency(totals.discountAmount)}</span>
+                    </div>
+                  )}
+                  <div className="flex justify-between text-[7px] sm:text-[9px] uppercase font-bold tracking-widest border-b border-black/5 pb-1.5 items-center">
+                    <span className="text-black/30">Tax ({totals.taxRate}%)</span>
+                    <span className="text-black">{formatCurrency(totals.taxTotal)}</span>
+                  </div>
+                </>
+              ) : type !== 'Receipt' ? (
                 <div className="flex justify-between text-[7px] sm:text-[9px] uppercase font-bold tracking-widest border-b border-black/5 pb-1.5">
                   <span className="text-black/30">Subtotal</span>
-                  <span className="text-black">{formatCurrency((data as any).subtotal || 0)}</span>
+                  <span className="text-black">{formatCurrency(totals.subtotal)}</span>
                 </div>
-              )}
+              ) : null}
               <div className="flex justify-between pt-3 sm:pt-5 items-end">
                 <span className="text-[8px] sm:text-[10px] font-black uppercase tracking-[0.4em] text-black">
                   {type === 'Receipt' ? 'Amount Received' : 'Total'}
                 </span>
                 <span className="text-xl sm:text-4xl font-black tracking-tighter leading-none" style={{ color: settings.brandColors?.secondary || '#B8860B' }}>
-                  {formatCurrency((data as any).grandTotal || (data as any).amount || 0)}
+                  {formatCurrency(totals.grandTotal || (data as any).amount || 0)}
                 </span>
               </div>
             </div>

@@ -53,6 +53,11 @@ export default function QuotationBuilder({ isOpen, onClose, initialQuotation, op
   const [isQuickQuote, setIsQuickQuote] = useState(defaultQuickQuote || false);
   const [quickQuoteTitle, setQuickQuoteTitle] = useState('');
   const [quickQuoteDate, setQuickQuoteDate] = useState('');
+  
+  // Transport & Staffing
+  const [transportPrice, setTransportPrice] = useState(0);
+  const [laborPrice, setLaborPrice] = useState(0);
+  const [laborStaffCount, setLaborStaffCount] = useState(0);
 
   const { data: clients = [] } = useSupabaseQuery<Client>('clients', (q) => q.select('*').order('fullName'));
   const { data: events = [] } = useSupabaseQuery<Event>('events', (q) => {
@@ -69,17 +74,38 @@ export default function QuotationBuilder({ isOpen, onClose, initialQuotation, op
       if (initialQuotation) {
         setSelectedClientId(initialQuotation.clientId);
         setSelectedEventId(initialQuotation.eventId || null);
-        setLineItems(initialQuotation.items || []);
+        
+        // Extract transport and labor items
+        const rawItems = initialQuotation.items || [];
+        const transportItem = rawItems.find(item => item.category === 'Transport');
+        const laborItem = rawItems.find(item => item.category === 'Labour');
+        
+        setTransportPrice(transportItem ? transportItem.unitPrice : 0);
+        setLaborPrice(laborItem ? laborItem.unitPrice : 0);
+        setLaborStaffCount(laborItem ? laborItem.quantity : 0);
+        
+        // Filter out of normal line items
+        const filteredItems = rawItems.filter(
+          item => item.category !== 'Transport' && item.category !== 'Labour'
+        );
+        setLineItems(filteredItems);
+        
         setGlobalDiscount(initialQuotation.globalDiscount || 0);
         setDepositRequired(initialQuotation.depositRequired || 0);
-        setTaxRate((initialQuotation.taxTotal / (initialQuotation.subtotal - initialQuotation.discountTotal)) * 100 || settings?.taxRate || 0);
+        const subtotal = initialQuotation.subtotal || 0;
+        const discountTotal = initialQuotation.discountTotal || 0;
+        const taxRateVal = subtotal - discountTotal > 0 
+          ? (initialQuotation.taxTotal / (subtotal - discountTotal)) * 100 
+          : settings?.taxRate || 0;
+        setTaxRate(taxRateVal || settings?.taxRate || 0);
         setIsQuickQuote(!initialQuotation.eventId);
-        // If it's a quick quote, try to find the event title from related events if possible
-        // but usually quick quotes don't have events yet.
       } else {
         setSelectedClientId(null);
         setSelectedEventId(null);
         setLineItems([]);
+        setTransportPrice(0);
+        setLaborPrice(0);
+        setLaborStaffCount(0);
         setGlobalDiscount(0);
         setDepositRequired(0);
         setTaxRate(settings?.taxRate || 0);
@@ -91,7 +117,11 @@ export default function QuotationBuilder({ isOpen, onClose, initialQuotation, op
   }, [isOpen, initialQuotation, settings]);
 
   const totals = useMemo(() => {
-    const subtotal = lineItems.reduce((sum, item) => sum + (item.quantity * item.unitPrice * (1 - item.discount/100)), 0);
+    const itemsSubtotal = lineItems.reduce((sum, item) => sum + (item.quantity * item.unitPrice * (1 - item.discount/100)), 0);
+    const transportCost = transportPrice;
+    const laborCost = laborPrice * laborStaffCount;
+    const subtotal = itemsSubtotal + transportCost + laborCost;
+    
     const discountAmount = subtotal * (globalDiscount / 100);
     const subtotalAfterDiscount = subtotal - discountAmount;
     const taxTotal = subtotalAfterDiscount * (taxRate / 100);
@@ -104,7 +134,7 @@ export default function QuotationBuilder({ isOpen, onClose, initialQuotation, op
       grandTotal,
       balanceAfterDeposit: grandTotal - depositRequired
     };
-  }, [lineItems, globalDiscount, taxRate, depositRequired]);
+  }, [lineItems, transportPrice, laborPrice, laborStaffCount, globalDiscount, taxRate, depositRequired]);
 
   const handleAddLineItem = (item: CatalogItem) => {
     const newLineItem: QuotationLineItem = {
@@ -170,6 +200,30 @@ export default function QuotationBuilder({ isOpen, onClose, initialQuotation, op
       await logActivity(selectedClientId, 'Event Created', `Quick event "${quickQuoteTitle}" scheduled via Quotation Builder`, finalEventId, 'Event');
     }
 
+    const finalItems = [...lineItems];
+    if (transportPrice > 0) {
+      finalItems.push({
+        name: 'Transport Fee',
+        description: 'Transport & Logistics charges',
+        category: 'Transport',
+        quantity: 1,
+        unit: 'Trip',
+        unitPrice: transportPrice,
+        discount: 0
+      });
+    }
+    if (laborPrice > 0 && laborStaffCount > 0) {
+      finalItems.push({
+        name: 'Labour charges',
+        description: `Labour for ${laborStaffCount} staff members`,
+        category: 'Labour',
+        quantity: laborStaffCount,
+        unit: 'Pax',
+        unitPrice: laborPrice,
+        discount: 0
+      });
+    }
+
     const quotationData: any = {
       clientId: selectedClientId,
       eventId: finalEventId || undefined,
@@ -178,7 +232,7 @@ export default function QuotationBuilder({ isOpen, onClose, initialQuotation, op
       validUntil: initialQuotation?.validUntil || new Date(Date.now() + (settings?.defaultValidityDays || 14) * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
       currency: settings?.currency || 'KES',
       status,
-      items: lineItems,
+      items: finalItems,
       subtotal: totals.subtotal,
       discountTotal: totals.discountAmount,
       globalDiscount,
@@ -357,13 +411,32 @@ export default function QuotationBuilder({ isOpen, onClose, initialQuotation, op
                   <Calculator size={12} style={{ color: settings?.brandColors?.secondary || '#D4AF37' }} />
                   Items
                 </h3>
-                <button 
-                  onClick={() => setIsItemFinderOpen(true)}
-                  className="flex items-center gap-2 px-3 py-1.5 text-white rounded-lg font-bold text-[8px] md:text-[10px] uppercase tracking-widest hover:opacity-90 transition-all"
-                  style={{ backgroundColor: settings?.brandColors?.primary || '#000000' }}
-                >
-                  <Plus size={12} /> Catalog
-                </button>
+                <div className="flex gap-2">
+                  <button 
+                    onClick={() => {
+                      const newCustomItem: QuotationLineItem = {
+                        name: 'New Custom Item',
+                        description: '',
+                        category: 'Custom',
+                        quantity: 1,
+                        unit: 'pcs',
+                        unitPrice: 0,
+                        discount: 0
+                      };
+                      setLineItems([...lineItems, newCustomItem]);
+                    }}
+                    className="flex items-center gap-2 px-3 py-1.5 bg-white border border-black/5 hover:border-black text-black/60 hover:text-black rounded-lg font-bold text-[8px] md:text-[10px] uppercase tracking-widest transition-all"
+                  >
+                    <Plus size={12} /> Custom Item
+                  </button>
+                  <button 
+                    onClick={() => setIsItemFinderOpen(true)}
+                    className="flex items-center gap-2 px-3 py-1.5 text-white rounded-lg font-bold text-[8px] md:text-[10px] uppercase tracking-widest hover:opacity-90 transition-all"
+                    style={{ backgroundColor: settings?.brandColors?.primary || '#000000' }}
+                  >
+                    <Plus size={12} /> Catalog
+                  </button>
+                </div>
               </div>
 
               {/* Line Items: Mobile Card List */}
@@ -565,6 +638,39 @@ export default function QuotationBuilder({ isOpen, onClose, initialQuotation, op
                 <div className="pt-3 flex justify-between items-end">
                   <span className="text-[9px] font-black uppercase tracking-[0.2em] text-black">Total</span>
                   <span className="text-xl font-black leading-none" style={{ color: settings?.brandColors?.secondary || '#D4AF37' }}>{formatCurrency(totals.grandTotal)}</span>
+                </div>
+
+                <div className="p-3 bg-bg-base border border-black/5 rounded-xl space-y-3">
+                  <h4 className="text-[8px] font-black uppercase tracking-widest text-black/40 border-b pb-1">Logistics & Staffing</h4>
+                  <div className="space-y-2">
+                    <div className="flex justify-between items-center">
+                      <span className="text-[8px] font-black uppercase tracking-widest text-black/30">Transport Price</span>
+                      <input 
+                        type="number"
+                        value={transportPrice}
+                        onChange={(e) => setTransportPrice(Number(e.target.value))}
+                        className="w-16 bg-white border border-black/10 px-1.5 py-1 text-right text-[10px] font-black outline-none rounded-md"
+                      />
+                    </div>
+                    <div className="flex justify-between items-center pt-1.5 border-t border-black/5">
+                      <span className="text-[8px] font-black uppercase tracking-widest text-black/30">Labour (per Staff)</span>
+                      <input 
+                        type="number"
+                        value={laborPrice}
+                        onChange={(e) => setLaborPrice(Number(e.target.value))}
+                        className="w-16 bg-white border border-black/10 px-1.5 py-1 text-right text-[10px] font-black outline-none rounded-md"
+                      />
+                    </div>
+                    <div className="flex justify-between items-center pt-1.5 border-t border-black/5">
+                      <span className="text-[8px] font-black uppercase tracking-widest text-black/30">Labour Count</span>
+                      <input 
+                        type="number"
+                        value={laborStaffCount}
+                        onChange={(e) => setLaborStaffCount(Number(e.target.value))}
+                        className="w-16 bg-white border border-black/10 px-1.5 py-1 text-right text-[10px] font-black outline-none rounded-md"
+                      />
+                    </div>
+                  </div>
                 </div>
 
                 <div className="p-3 bg-bg-base border border-black/5 rounded-xl space-y-2">

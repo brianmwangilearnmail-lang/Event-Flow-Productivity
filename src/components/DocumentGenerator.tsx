@@ -50,6 +50,7 @@ export default function DocumentGenerator({ type, data, onClose }: DocumentGener
   const [transportPrice, setTransportPrice] = React.useState(0);
   const [laborPrice, setLaborPrice] = React.useState(0);
   const [laborStaffCount, setLaborStaffCount] = React.useState(0);
+  const [laborCost, setLaborCost] = React.useState(0);
 
   React.useEffect(() => {
     if (data) {
@@ -62,6 +63,7 @@ export default function DocumentGenerator({ type, data, onClose }: DocumentGener
         setTransportPrice(transportItem ? transportItem.unitPrice : 0);
         setLaborPrice(laborItem ? laborItem.unitPrice : 0);
         setLaborStaffCount(laborItem ? laborItem.quantity : 0);
+        setLaborCost(laborItem ? (laborItem.quantity > 0 && laborItem.unitPrice > 0 ? laborItem.quantity * laborItem.unitPrice : laborItem.unitPrice) : 0);
         
         const filteredItems = rawItems.filter(
           item => item.category !== 'Transport' && item.category !== 'Labour'
@@ -103,7 +105,6 @@ export default function DocumentGenerator({ type, data, onClose }: DocumentGener
     if (type === 'Quotation') {
       const itemsSubtotal = lineItems.reduce((sum, item) => sum + (item.quantity * item.unitPrice * (1 - (item.discount || 0)/100)), 0);
       const transportCost = transportPrice;
-      const laborCost = laborPrice * laborStaffCount;
       const subtotal = itemsSubtotal + transportCost + laborCost;
       
       const globalDiscount = editableData.globalDiscount || 0;
@@ -132,7 +133,7 @@ export default function DocumentGenerator({ type, data, onClose }: DocumentGener
         taxRate: 0
       };
     }
-  }, [type, lineItems, transportPrice, laborPrice, laborStaffCount, editableData.globalDiscount, editableData.taxRate, rawSettings?.taxRate]);
+  }, [type, lineItems, transportPrice, laborCost, editableData.globalDiscount, editableData.taxRate, rawSettings?.taxRate]);
 
   const handleUpdate = (type: 'data' | 'settings' | 'client' | 'event', field: string, value: any) => {
     setHasChanges(true);
@@ -166,14 +167,17 @@ export default function DocumentGenerator({ type, data, onClose }: DocumentGener
             discount: 0
           });
         }
-        if (laborPrice > 0 && laborStaffCount > 0) {
+        if (laborCost > 0) {
+          const hasStaffDetails = laborStaffCount > 0 && laborPrice > 0 && (laborPrice * laborStaffCount === laborCost);
           finalItems.push({
             name: 'Labour charges',
-            description: `Labour for ${laborStaffCount} staff members`,
+            description: hasStaffDetails 
+              ? `Labour for ${laborStaffCount} staff members`
+              : 'Labour charges (Estimated)',
             category: 'Labour',
-            quantity: laborStaffCount,
-            unit: 'Pax',
-            unitPrice: laborPrice,
+            quantity: hasStaffDetails ? laborStaffCount : 1,
+            unit: hasStaffDetails ? 'Pax' : 'Flat',
+            unitPrice: hasStaffDetails ? laborPrice : laborCost,
             discount: 0
           });
         }
@@ -622,7 +626,9 @@ export default function DocumentGenerator({ type, data, onClose }: DocumentGener
                             type="number"
                             value={laborStaffCount}
                             onChange={(e) => {
-                              setLaborStaffCount(Number(e.target.value));
+                              const count = Number(e.target.value);
+                              setLaborStaffCount(count);
+                              setLaborCost(laborPrice * count);
                               setHasChanges(true);
                             }}
                             className="w-8 text-center text-[9px] sm:text-xs font-bold bg-transparent border-none outline-none p-0 focus:ring-1 focus:ring-black/5 rounded"
@@ -632,18 +638,36 @@ export default function DocumentGenerator({ type, data, onClose }: DocumentGener
                         </div>
                       </td>
                       <td className="py-2 px-2 sm:py-3 sm:px-3 text-right">
-                        <div className="flex items-center justify-end gap-1">
-                          <span className="text-[6px] sm:text-[8px] text-black/30 uppercase font-black whitespace-nowrap">Rate:</span>
-                          <input 
-                            type="number"
-                            value={laborPrice}
-                            onChange={(e) => {
-                              setLaborPrice(Number(e.target.value));
-                              setHasChanges(true);
-                            }}
-                            className="w-16 text-right text-[9px] sm:text-base font-serif italic bg-transparent border-none outline-none p-0 focus:ring-1 focus:ring-black/5 rounded"
-                            placeholder="0"
-                          />
+                        <div className="flex flex-col sm:flex-row items-end sm:items-center justify-end gap-2">
+                          <div className="flex items-center gap-1">
+                            <span className="text-[6px] sm:text-[8px] text-black/30 uppercase font-black whitespace-nowrap">Rate:</span>
+                            <input 
+                              type="number"
+                              value={laborPrice}
+                              onChange={(e) => {
+                                const price = Number(e.target.value);
+                                setLaborPrice(price);
+                                setLaborCost(price * laborStaffCount);
+                                setHasChanges(true);
+                              }}
+                              className="w-12 text-right text-[9px] sm:text-base font-serif italic bg-transparent border-none outline-none p-0 focus:ring-1 focus:ring-black/5 rounded"
+                              placeholder="0"
+                            />
+                          </div>
+                          <div className="flex items-center gap-1 border-t sm:border-t-0 sm:border-l border-black/5 pt-1 sm:pt-0 sm:pl-2">
+                            <span className="text-[6px] sm:text-[8px] text-black/30 uppercase font-black whitespace-nowrap">Cost:</span>
+                            <input 
+                              type="number"
+                              value={laborCost}
+                              onChange={(e) => {
+                                const cost = Number(e.target.value);
+                                setLaborCost(cost);
+                                setHasChanges(true);
+                              }}
+                              className="w-16 text-right text-[9px] sm:text-base font-serif italic bg-transparent border-none outline-none p-0 focus:ring-1 focus:ring-black/5 rounded"
+                              placeholder="0"
+                            />
+                          </div>
                         </div>
                       </td>
                     </tr>

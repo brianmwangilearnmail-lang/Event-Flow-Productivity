@@ -65,6 +65,7 @@ export default function QuotationBuilder({ isOpen, onClose, initialQuotation, op
   const [transportPrice, setTransportPrice] = useState(0);
   const [laborPrice, setLaborPrice] = useState(0);
   const [laborStaffCount, setLaborStaffCount] = useState(0);
+  const [laborCost, setLaborCost] = useState(0);
 
   const { data: clients = [] } = useSupabaseQuery<Client>('clients', (q) => q.select('*').order('fullName'));
   const { data: events = [] } = useSupabaseQuery<Event>('events', (q) => {
@@ -90,6 +91,7 @@ export default function QuotationBuilder({ isOpen, onClose, initialQuotation, op
         setTransportPrice(transportItem ? transportItem.unitPrice : 0);
         setLaborPrice(laborItem ? laborItem.unitPrice : 0);
         setLaborStaffCount(laborItem ? laborItem.quantity : 0);
+        setLaborCost(laborItem ? (laborItem.quantity > 0 && laborItem.unitPrice > 0 ? laborItem.quantity * laborItem.unitPrice : laborItem.unitPrice) : 0);
         
         // Filter out of normal line items
         const filteredItems = rawItems.filter(
@@ -127,6 +129,7 @@ export default function QuotationBuilder({ isOpen, onClose, initialQuotation, op
         setTransportPrice(0);
         setLaborPrice(0);
         setLaborStaffCount(0);
+        setLaborCost(0);
         setGlobalDiscount(0);
         setDepositRequired(0);
         setTaxRate(settings?.taxRate || 0);
@@ -144,7 +147,6 @@ export default function QuotationBuilder({ isOpen, onClose, initialQuotation, op
   const totals = useMemo(() => {
     const itemsSubtotal = lineItems.reduce((sum, item) => sum + (item.quantity * item.unitPrice * (1 - item.discount/100)), 0);
     const transportCost = transportPrice;
-    const laborCost = laborPrice * laborStaffCount;
     const subtotal = itemsSubtotal + transportCost + laborCost;
     
     const discountAmount = subtotal * (globalDiscount / 100);
@@ -159,7 +161,7 @@ export default function QuotationBuilder({ isOpen, onClose, initialQuotation, op
       grandTotal,
       balanceAfterDeposit: grandTotal - depositRequired
     };
-  }, [lineItems, transportPrice, laborPrice, laborStaffCount, globalDiscount, taxRate, depositRequired]);
+  }, [lineItems, transportPrice, laborCost, globalDiscount, taxRate, depositRequired]);
 
   const handleAddLineItem = (item: CatalogItem) => {
     const newLineItem: QuotationLineItem = {
@@ -288,14 +290,17 @@ export default function QuotationBuilder({ isOpen, onClose, initialQuotation, op
         discount: 0
       });
     }
-    if (laborPrice > 0 && laborStaffCount > 0) {
+    if (laborCost > 0) {
+      const hasStaffDetails = laborStaffCount > 0 && laborPrice > 0 && (laborPrice * laborStaffCount === laborCost);
       finalItems.push({
         name: 'Labour charges',
-        description: `Labour for ${laborStaffCount} staff members`,
+        description: hasStaffDetails 
+          ? `Labour for ${laborStaffCount} staff members`
+          : 'Labour charges (Estimated)',
         category: 'Labour',
-        quantity: laborStaffCount,
-        unit: 'Pax',
-        unitPrice: laborPrice,
+        quantity: hasStaffDetails ? laborStaffCount : 1,
+        unit: hasStaffDetails ? 'Pax' : 'Flat',
+        unitPrice: hasStaffDetails ? laborPrice : laborCost,
         discount: 0
       });
     }
@@ -648,15 +653,15 @@ export default function QuotationBuilder({ isOpen, onClose, initialQuotation, op
                   )}
                 </div>
 
-                {/* Desktop Table View */}
+                 {/* Desktop Table View */}
                 <table className="hidden md:table w-full text-left border-collapse min-w-[600px]">
                   <thead>
                     <tr className="bg-bg-base/30">
                       <th className="px-8 py-4 text-[9px] uppercase tracking-[0.3em] font-bold text-black/40 border-b border-black/5 w-16">Icon</th>
                       <th className="px-8 py-4 text-[9px] uppercase tracking-[0.3em] font-bold text-black/40 border-b border-black/5">Item Detail</th>
-                      <th className="px-8 py-4 text-[9px] uppercase tracking-[0.3em] font-bold text-black/40 border-b border-black/5 w-24 text-center">Qty</th>
-                      <th className="px-8 py-4 text-[9px] uppercase tracking-[0.3em] font-bold text-black/40 border-b border-black/5 w-32 text-right">Rate</th>
-                      <th className="px-8 py-4 text-[9px] uppercase tracking-[0.3em] font-bold text-black/40 border-b border-black/5 w-24 text-center">Disc%</th>
+                      <th className="px-2 py-4 text-[9px] uppercase tracking-[0.3em] font-bold text-black/40 border-b border-black/5 w-24 text-center">Qty</th>
+                      <th className="px-2 py-4 text-[9px] uppercase tracking-[0.3em] font-bold text-black/40 border-b border-black/5 w-32 text-right">Rate</th>
+                      <th className="px-2 py-4 text-[9px] uppercase tracking-[0.3em] font-bold text-black/40 border-b border-black/5 w-24 text-center">Disc%</th>
                       <th className="px-8 py-4 text-[9px] uppercase tracking-[0.3em] font-bold text-black/40 border-b border-black/5 text-right w-36">Total</th>
                       <th className="px-8 py-4 text-[9px] uppercase tracking-[0.3em] font-bold text-black/40 border-b border-black/5 w-16"></th>
                     </tr>
@@ -679,7 +684,7 @@ export default function QuotationBuilder({ isOpen, onClose, initialQuotation, op
                             <input 
                               value={item.name} 
                               onChange={(e) => updateLineItem(i, 'name', e.target.value)}
-                              className="text-sm font-bold bg-transparent border-none p-0 outline-none w-full focus:text-gold-deep"
+                              className="text-sm font-bold bg-transparent border-none p-0 outline-none w-full focus:text-gold-deep text-black"
                             />
                             <input 
                               value={item.description} 
@@ -688,31 +693,31 @@ export default function QuotationBuilder({ isOpen, onClose, initialQuotation, op
                               placeholder="Brief summary..."
                             />
                           </td>
-                          <td className="px-8 py-6">
+                          <td className="px-2 py-6">
                           <input 
                             type="number"
                             value={item.quantity} 
                             onChange={(e) => updateLineItem(i, 'quantity', Number(e.target.value))}
-                            className="text-xs font-bold bg-bg-base/50 border border-black/5 p-2 outline-none w-full text-center"
+                            className="text-xs font-bold bg-bg-base/50 border border-black/5 p-2 outline-none w-full text-center text-black"
                           />
                         </td>
-                        <td className="px-8 py-6">
+                        <td className="px-2 py-6">
                           <input 
                             type="number"
                             value={item.unitPrice} 
                             onChange={(e) => updateLineItem(i, 'unitPrice', Number(e.target.value))}
-                            className="text-xs font-bold bg-bg-base/50 border border-black/5 p-2 outline-none w-full text-right"
+                            className="text-xs font-bold bg-bg-base/50 border border-black/5 p-2 outline-none w-full text-right text-black"
                           />
                         </td>
-                        <td className="px-8 py-6">
+                        <td className="px-2 py-6">
                           <input 
                             type="number"
                             value={item.discount} 
                             onChange={(e) => updateLineItem(i, 'discount', Number(e.target.value))}
-                            className="text-xs font-bold bg-bg-base/50 border border-black/5 p-2 outline-none w-full text-center"
+                            className="text-xs font-bold bg-bg-base/50 border border-black/5 p-2 outline-none w-full text-center text-black"
                           />
                         </td>
-                        <td className="px-8 py-6 text-right font-serif text-lg tracking-tight">
+                        <td className="px-8 py-6 text-right font-serif text-lg tracking-tight text-black">
                           {formatCurrency(item.quantity * item.unitPrice * (1 - item.discount/100))}
                         </td>
                         <td className="px-8 py-6 text-right">
@@ -795,7 +800,11 @@ export default function QuotationBuilder({ isOpen, onClose, initialQuotation, op
                       <input 
                         type="number"
                         value={laborPrice}
-                        onChange={(e) => setLaborPrice(Number(e.target.value))}
+                        onChange={(e) => {
+                          const val = Number(e.target.value);
+                          setLaborPrice(val);
+                          setLaborCost(val * laborStaffCount);
+                        }}
                         className="w-16 bg-white border border-black/10 px-1.5 py-1 text-right text-[10px] font-black outline-none rounded-md"
                       />
                     </div>
@@ -804,7 +813,23 @@ export default function QuotationBuilder({ isOpen, onClose, initialQuotation, op
                       <input 
                         type="number"
                         value={laborStaffCount}
-                        onChange={(e) => setLaborStaffCount(Number(e.target.value))}
+                        onChange={(e) => {
+                          const val = Number(e.target.value);
+                          setLaborStaffCount(val);
+                          setLaborCost(laborPrice * val);
+                        }}
+                        className="w-16 bg-white border border-black/10 px-1.5 py-1 text-right text-[10px] font-black outline-none rounded-md"
+                      />
+                    </div>
+                    <div className="flex justify-between items-center pt-1.5 border-t border-black/5">
+                      <span className="text-[8px] font-black uppercase tracking-widest text-black/30">Labour Cost</span>
+                      <input 
+                        type="number"
+                        value={laborCost}
+                        onChange={(e) => {
+                          const val = Number(e.target.value);
+                          setLaborCost(val);
+                        }}
                         className="w-16 bg-white border border-black/10 px-1.5 py-1 text-right text-[10px] font-black outline-none rounded-md"
                       />
                     </div>

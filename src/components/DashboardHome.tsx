@@ -38,7 +38,7 @@ export default function DashboardHome({ onNavigate }: DashboardHomeProps) {
   const { user } = useAuth();
   
   const { settings } = useSettings();
-  const { data: clients = [] } = useSupabaseQuery<Pick<Client,'id'|'fullName'>>('clients', (q) => q.select('id, fullName'));
+  const { data: clients = [] } = useSupabaseQuery<Pick<Client,'id'|'fullName'|'tags'>>('clients', (q) => q.select('id, fullName, tags'));
   const { data: events = [] } = useSupabaseQuery<Pick<Event,'id'|'status'>>('events', (q) => q.select('id, status').neq('status', 'Cancelled'));
   const { data: quotations = [] } = useSupabaseQuery<Pick<Quotation,'id'|'status'>>('quotations', (q) => q.select('id, status'));
   const { data: invoices = [] } = useSupabaseQuery<Pick<Invoice,'id'|'grandTotal'|'amountPaid'>>('invoices', (q) => q.select('id, grandTotal, amountPaid'));
@@ -47,7 +47,11 @@ export default function DashboardHome({ onNavigate }: DashboardHomeProps) {
   
   const [timeRange, setTimeRange] = useState('month');
   
-  const clientCount = clients?.length || 0;
+  const activeClients = React.useMemo(() => {
+    return clients.filter(c => !c.tags || !c.tags.includes('temporary'));
+  }, [clients]);
+
+  const clientCount = activeClients?.length || 0;
   const eventCount = events?.length || 0;
   const draftQuotes = quotations?.filter(q => q.status === 'Draft').length || 0;
 

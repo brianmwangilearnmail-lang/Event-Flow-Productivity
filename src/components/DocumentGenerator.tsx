@@ -225,6 +225,24 @@ export default function DocumentGenerator({ type, data, onClose }: DocumentGener
     }
   };
 
+  const handlePromoteClient = async () => {
+    if (!client) return;
+    const newTags = (client.tags || []).filter((t: string) => t !== 'temporary');
+    const { error } = await supabase
+      .from('clients')
+      .update({ tags: newTags })
+      .eq('id', client.id);
+    
+    if (error) {
+      alert('Error promoting client: ' + error.message);
+    } else {
+      alert('Client successfully added to database!');
+      if (editableClient) {
+        setEditableClient({ ...editableClient, tags: newTags });
+      }
+    }
+  };
+
   const handleDownloadPDF = async () => {
     if (!documentRef.current) return;
 
@@ -361,6 +379,21 @@ export default function DocumentGenerator({ type, data, onClose }: DocumentGener
           </button>
         </div>
       </div>
+
+      {/* Promotion Banner */}
+      {editableClient?.tags?.includes('temporary') && (
+        <div className="bg-blue-50 border border-blue-200 text-blue-800 p-3 rounded-xl flex items-center justify-between gap-4 no-print mx-1">
+          <p className="text-[10px] font-bold uppercase tracking-wider">
+            This client is currently temporary and excluded from your main Client Database.
+          </p>
+          <button
+            onClick={handlePromoteClient}
+            className="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-[9px] font-black uppercase tracking-widest transition-all shadow-md shrink-0"
+          >
+            Add Client to Database
+          </button>
+        </div>
+      )}
 
       {/* Document Preview — scrollable, fluid width */}
       <div className="flex-1 overflow-auto doc-scroll-container bg-bg-base/30 border border-black/5 rounded-2xl p-2 sm:p-4 md:p-6">

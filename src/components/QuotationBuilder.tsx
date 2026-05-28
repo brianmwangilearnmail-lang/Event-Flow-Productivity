@@ -26,7 +26,8 @@ import {
   Quotation, 
   DocumentStatus, 
   QuotationLineItem,
-  BusinessSettings
+  BusinessSettings,
+  ClientStatus
 } from '../types';
 import { cn, formatCurrency } from '../lib/utils';
 import Modal from './Modal';
@@ -53,6 +54,12 @@ export default function QuotationBuilder({ isOpen, onClose, initialQuotation, op
   const [isQuickQuote, setIsQuickQuote] = useState(defaultQuickQuote || false);
   const [quickQuoteTitle, setQuickQuoteTitle] = useState('');
   const [quickQuoteDate, setQuickQuoteDate] = useState('');
+  
+  // Temporary client details
+  const [isExistingClient, setIsExistingClient] = useState(true);
+  const [tempClientName, setTempClientName] = useState('');
+  const [tempClientEmail, setTempClientEmail] = useState('');
+  const [tempClientPhone, setTempClientPhone] = useState('');
   
   // Transport & Staffing
   const [transportPrice, setTransportPrice] = useState(0);
@@ -99,6 +106,20 @@ export default function QuotationBuilder({ isOpen, onClose, initialQuotation, op
           : settings?.taxRate || 0;
         setTaxRate(taxRateVal || settings?.taxRate || 0);
         setIsQuickQuote(!initialQuotation.eventId);
+        
+        // Check if the current client is temporary
+        const currentClient = clients.find(c => c.id === initialQuotation.clientId);
+        if (currentClient && currentClient.tags?.includes('temporary')) {
+          setIsExistingClient(false);
+          setTempClientName(currentClient.fullName);
+          setTempClientEmail(currentClient.email || '');
+          setTempClientPhone(currentClient.phone || '');
+        } else {
+          setIsExistingClient(true);
+          setTempClientName('');
+          setTempClientEmail('');
+          setTempClientPhone('');
+        }
       } else {
         setSelectedClientId(null);
         setSelectedEventId(null);
@@ -112,9 +133,13 @@ export default function QuotationBuilder({ isOpen, onClose, initialQuotation, op
         setIsQuickQuote(defaultQuickQuote || false);
         setQuickQuoteTitle('');
         setQuickQuoteDate('');
+        setIsExistingClient(true);
+        setTempClientName('');
+        setTempClientEmail('');
+        setTempClientPhone('');
       }
     }
-  }, [isOpen, initialQuotation, settings]);
+  }, [isOpen, initialQuotation, settings, clients]);
 
   const totals = useMemo(() => {
     const itemsSubtotal = lineItems.reduce((sum, item) => sum + (item.quantity * item.unitPrice * (1 - item.discount/100)), 0);
@@ -162,9 +187,60 @@ export default function QuotationBuilder({ isOpen, onClose, initialQuotation, op
   };
 
   const handleSave = async (status: DocumentStatus, createEvent = false) => {
-    if (!selectedClientId) {
-      alert('Please select a client');
-      return;
+    let finalClientId = selectedClientId;
+
+    if (isQuickQuote && !isExistingClient) {
+      if (!tempClientName) {
+        alert('Please enter a client name');
+        return;
+      }
+
+      if (initialQuotation?.clientId) {
+        // Update existing temporary client details
+        const { error: clientError } = await supabase
+          .from('clients')
+          .update({
+            fullName: tempClientName,
+            email: tempClientEmail || 'no-email@temporary.com',
+            phone: tempClientPhone || 'no-phone'
+          })
+          .eq('id', initialQuotation.clientId);
+        if (clientError) {
+          alert('Error updating client: ' + clientError.message);
+          return;
+        }
+        finalClientId = initialQuotation.clientId;
+      } else {
+        // Create new temporary client
+        const tempClient = {
+          fullName: tempClientName,
+          email: tempClientEmail || 'no-email@temporary.com',
+          phone: tempClientPhone || 'no-phone',
+          address: 'Temporary Address',
+          communicationChannel: 'Email',
+          tags: ['temporary'],
+          notes: 'Created via Quick Quote Mode',
+          status: ClientStatus.NEW_INQUIRY,
+          assignedStaff: 'Admin User'
+        };
+
+        const { data: createdClient, error: clientError } = await supabase
+          .from('clients')
+          .insert(tempClient)
+          .select()
+          .single();
+
+        if (clientError) {
+          alert('Error creating temporary client: ' + clientError.message);
+          return;
+        }
+        finalClientId = createdClient.id;
+      }
+    } else {
+      if (!finalClientId) {
+        alert('Please select a client');
+        return;
+      }
     }
 
     if (!isQuickQuote && !selectedEventId) {
@@ -182,7 +258,7 @@ export default function QuotationBuilder({ isOpen, onClose, initialQuotation, op
       }
 
       const newEvent = {
-        clientId: selectedClientId,
+        clientId: finalClientId,
         title: quickQuoteTitle,
         date: quickQuoteDate || new Date().toISOString().split('T')[0],
         status: 'Confirmed',
@@ -197,7 +273,7 @@ export default function QuotationBuilder({ isOpen, onClose, initialQuotation, op
         return;
       }
       finalEventId = createdEvent[0].id;
-      await logActivity(selectedClientId, 'Event Created', `Quick event "${quickQuoteTitle}" scheduled via Quotation Builder`, finalEventId, 'Event');
+      await logActivity(finalClientId, 'Event Created', `Quick event "${quickQuoteTitle}" scheduled via Quotation Builder`, finalEventId, 'Event');
     }
 
     const finalItems = [...lineItems];
@@ -225,7 +301,7 @@ export default function QuotationBuilder({ isOpen, onClose, initialQuotation, op
     }
 
     const quotationData: any = {
-      clientId: selectedClientId,
+      clientId: finalClientId,
       eventId: finalEventId || undefined,
       number: initialQuotation?.number || `QTN-${Date.now().toString().slice(-6)}`,
       date: initialQuotation?.date || new Date().toISOString().split('T')[0],
@@ -263,7 +339,7 @@ export default function QuotationBuilder({ isOpen, onClose, initialQuotation, op
     }
     const id = result[0].id;
     await logActivity(
-      selectedClientId, 
+      finalClientId, 
       initialQuotation?.id ? 'Quotation Updated' : 'Quotation Created', 
       `Quotation #${quotationData.number} ${initialQuotation?.id ? 'updated' : 'saved'} as ${status}`, 
       id, 
@@ -282,14 +358,76 @@ export default function QuotationBuilder({ isOpen, onClose, initialQuotation, op
             <div className="space-y-3 md:space-y-6">
               <div className="space-y-1">
                 <label className="text-[8px] font-bold uppercase tracking-[0.2em] text-black/30">Client</label>
-                <select 
-                  className="w-full px-2 py-1.5 bg-white border border-black/5 rounded-lg outline-none focus:ring-1 focus:ring-gold-deep font-bold text-[10px]"
-                  value={selectedClientId || ''}
-                  onChange={(e) => setSelectedClientId(Number(e.target.value))}
-                >
-                  <option value="">Select client...</option>
-                  {clients.map(c => <option key={c.id} value={c.id}>{c.fullName}</option>)}
-                </select>
+                {isQuickQuote && (
+                  <div className="flex bg-white p-0.5 border border-black/5 w-fit rounded-lg mb-2">
+                    <button 
+                      type="button"
+                      onClick={() => setIsExistingClient(true)}
+                      className={cn(
+                        "px-3 py-1 text-[8px] font-black uppercase tracking-widest transition-all rounded-md", 
+                        isExistingClient ? "bg-black text-white" : "text-black/40 hover:text-black"
+                      )}
+                    >
+                      Existing Client
+                    </button>
+                    <button 
+                      type="button"
+                      onClick={() => setIsExistingClient(false)}
+                      className={cn(
+                        "px-3 py-1 text-[8px] font-black uppercase tracking-widest transition-all rounded-md", 
+                        !isExistingClient ? "bg-black text-white" : "text-black/40 hover:text-black"
+                      )}
+                    >
+                      Quick Client
+                    </button>
+                  </div>
+                )}
+                
+                {(!isQuickQuote || isExistingClient) ? (
+                  <select 
+                    className="w-full px-2 py-1.5 bg-white border border-black/5 rounded-lg outline-none focus:ring-1 focus:ring-gold-deep font-bold text-[10px]"
+                    value={selectedClientId || ''}
+                    onChange={(e) => setSelectedClientId(Number(e.target.value))}
+                  >
+                    <option value="">Select client...</option>
+                    {clients.filter(c => !c.tags?.includes('temporary')).map(c => <option key={c.id} value={c.id}>{c.fullName}</option>)}
+                  </select>
+                ) : (
+                  <div className="space-y-2 pt-1">
+                    <div className="space-y-1">
+                      <label className="text-[7px] font-bold uppercase tracking-[0.2em] text-black/30">Client Name *</label>
+                      <input 
+                        type="text"
+                        placeholder="e.g. John Doe"
+                        className="w-full px-2 py-1.5 bg-white border border-black/5 rounded-lg outline-none focus:ring-1 focus:ring-gold-deep font-bold text-[10px]"
+                        value={tempClientName}
+                        onChange={(e) => setTempClientName(e.target.value)}
+                      />
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div className="space-y-1">
+                        <label className="text-[7px] font-bold uppercase tracking-[0.2em] text-black/30">Client Email</label>
+                        <input 
+                          type="email"
+                          placeholder="john@example.com"
+                          className="w-full px-2 py-1.5 bg-white border border-black/5 rounded-lg outline-none focus:ring-1 focus:ring-gold-deep font-bold text-[10px]"
+                          value={tempClientEmail}
+                          onChange={(e) => setTempClientEmail(e.target.value)}
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-[7px] font-bold uppercase tracking-[0.2em] text-black/30">Client Phone</label>
+                        <input 
+                          type="text"
+                          placeholder="+256..."
+                          className="w-full px-2 py-1.5 bg-white border border-black/5 rounded-lg outline-none focus:ring-1 focus:ring-gold-deep font-bold text-[10px]"
+                          value={tempClientPhone}
+                          onChange={(e) => setTempClientPhone(e.target.value)}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
               
               <div className="pt-2 border-t border-black/5 mt-2">

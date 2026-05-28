@@ -41,6 +41,10 @@ export default function ClientView({ onNavigate }: ClientViewProps) {
     return query;
   }, [searchTerm]);
 
+  const filteredClients = React.useMemo(() => {
+    return clients.filter(c => !c.tags || !c.tags.includes('temporary'));
+  }, [clients]);
+
   const handleAddClient = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
@@ -142,7 +146,7 @@ export default function ClientView({ onNavigate }: ClientViewProps) {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
-              {clients.map((client) => (
+              {filteredClients.map((client) => (
                 <tr key={client.id} className="hover:bg-gray-50/50 transition-colors group">
                   <td className="px-6 py-5">
                     <div className="flex items-center gap-4">
@@ -209,7 +213,7 @@ export default function ClientView({ onNavigate }: ClientViewProps) {
 
         {/* Mobile Card View */}
         <div className="md:hidden divide-y divide-gray-50">
-          {clients.map((client) => (
+          {filteredClients.map((client) => (
             <div key={client.id} className="p-4 flex items-center justify-between group active:bg-gray-50 transition-colors" onClick={() => { setSelectedClient(client); setIsProfileOpen(true); }}>
               <div className="flex items-center gap-3 min-w-0">
                 <div className="w-9 h-9 rounded-full bg-black flex items-center justify-center text-white font-bold text-xs shrink-0">

@@ -21,7 +21,8 @@ import {
   Zap,
   Calendar,
   MoreHorizontal,
-  Pencil
+  Pencil,
+  Users
 } from 'lucide-react';
 import { useSupabaseQuery } from '../hooks/useSupabaseQuery';
 import { supabase } from '../lib/supabase';
@@ -50,7 +51,7 @@ export default function QuotationView({ onNavigate }: QuotationViewProps) {
   const { settings } = useSettings();
 
   const { data: quotations = [], optimisticInsert, optimisticUpdate, optimisticDelete } = useSupabaseQuery<any>('quotations', (q) => {
-    let query = q.select('*, clients(fullName), events(title)').order('id', { ascending: false });
+    let query = q.select('*, clients(*), events(title)').order('id', { ascending: false });
     return query;
   }, []);
 
@@ -115,6 +116,36 @@ export default function QuotationView({ onNavigate }: QuotationViewProps) {
       if (existing) {
         logActivity(existing.clientId, 'Record Deleted', `Quotation #${existing.number} was deleted`, id, 'Quotation', existing);
       }
+    }
+  };
+
+  const handleAddClientToDatabase = async (quote: any) => {
+    if (!quote.clients) return;
+    const client = quote.clients;
+    const newTags = (client.tags || []).filter((t: string) => t !== 'temporary');
+    
+    // Optimistic update
+    optimisticUpdate(q => q.id === quote.id, {
+      clients: {
+        ...client,
+        tags: newTags
+      }
+    });
+
+    const { error } = await supabase
+      .from('clients')
+      .update({ tags: newTags })
+      .eq('id', client.id);
+    
+    if (error) {
+      alert('Error adding client to database: ' + error.message);
+      // Revert if error
+      optimisticUpdate(q => q.id === quote.id, {
+        clients: client
+      });
+    } else {
+      alert('Client successfully added to database!');
+      await logActivity(client.id, 'Client Promoted', `Client ${client.fullName} promoted from temporary to permanent database`, client.id, 'Client');
     }
   };
 
@@ -279,6 +310,16 @@ export default function QuotationView({ onNavigate }: QuotationViewProps) {
                           <span className="hidden lg:inline">Schedule Event</span>
                         </button>
                       )}
+                      {quote.clients?.tags?.includes('temporary') && (
+                        <button 
+                          onClick={() => handleAddClientToDatabase(quote)}
+                          className="flex items-center gap-1.5 px-3 py-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition-all text-[10px] font-black uppercase tracking-widest"
+                          title="Add Client to Database"
+                        >
+                          <Users size={14} />
+                          <span className="hidden lg:inline">Add Client to DB</span>
+                        </button>
+                      )}
                       <button 
                         onClick={() => { setSelectedQuote(quote); setIsViewModalOpen(true); }}
                         className="flex items-center gap-1.5 px-3 py-1.5 text-black/40 hover:text-white rounded-lg transition-all text-[10px] font-black uppercase tracking-widest" 
@@ -342,6 +383,17 @@ export default function QuotationView({ onNavigate }: QuotationViewProps) {
                     <p className="text-[10px] text-gray-400 uppercase tracking-tight truncate">
                       {quote.eventName} • {formatCurrency(quote.grandTotal, quote.currency)}
                     </p>
+                    {quote.clients?.tags?.includes('temporary') && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleAddClientToDatabase(quote);
+                        }}
+                        className="mt-1 flex items-center gap-1 px-2 py-0.5 bg-blue-50 text-blue-600 rounded text-[8px] font-black uppercase tracking-wider w-fit"
+                      >
+                        <Users size={10} /> Add Client to DB
+                      </button>
+                    )}
                   </div>
                 </div>
                 <div className="flex items-center gap-2">

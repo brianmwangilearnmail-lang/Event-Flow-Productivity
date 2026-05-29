@@ -383,7 +383,7 @@ export default function QuotationBuilder({ isOpen, onClose, initialQuotation, op
                         !isExistingClient ? "bg-black text-white" : "text-black/40 hover:text-black"
                       )}
                     >
-                      Quick Client
+                      Add Client
                     </button>
                   </div>
                 )}

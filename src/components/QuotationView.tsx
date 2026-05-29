@@ -34,6 +34,7 @@ import QuotationBuilder from './QuotationBuilder';
 import DocumentGenerator from './DocumentGenerator';
 import ScheduleEventModal from './ScheduleEventModal';
 import { useSettings } from '../context/SettingsContext';
+import { useToast } from '../context/ToastContext';
 
 interface QuotationViewProps {
   onNavigate?: (view: any) => void;
@@ -49,6 +50,7 @@ export default function QuotationView({ onNavigate }: QuotationViewProps) {
   const [statusFilter, setStatusFilter] = useState<DocumentStatus | 'All'>('All');
 
   const { settings } = useSettings();
+  const { success: toastSuccess, error: toastError } = useToast();
 
   const { data: quotations = [], optimisticInsert, optimisticUpdate, optimisticDelete } = useSupabaseQuery<any>('quotations', (q) => {
     let query = q.select('*, clients(*), events(title)').order('id', { ascending: false });
@@ -138,13 +140,13 @@ export default function QuotationView({ onNavigate }: QuotationViewProps) {
       .eq('id', client.id);
     
     if (error) {
-      alert('Error adding client to database: ' + error.message);
+      toastError('Error adding client to database: ' + error.message);
       // Revert if error
       optimisticUpdate(q => q.id === quote.id, {
         clients: client
       });
     } else {
-      alert('Client successfully added to database!');
+      toastSuccess('Client successfully added to database!');
       await logActivity(client.id, 'Client Promoted', `Client ${client.fullName} promoted from temporary to permanent database`, client.id, 'Client');
     }
   };

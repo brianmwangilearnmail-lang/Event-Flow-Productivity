@@ -7,6 +7,7 @@ import { formatCurrency } from '../lib/utils';
 import { useSupabaseQuery } from '../hooks/useSupabaseQuery';
 import { supabase } from '../lib/supabase';
 import { useSettings } from '../context/SettingsContext';
+import { useToast } from '../context/ToastContext';
 
 interface DocumentGeneratorProps {
   type: 'Quotation' | 'Invoice' | 'Receipt';
@@ -15,6 +16,7 @@ interface DocumentGeneratorProps {
 }
 
 export default function DocumentGenerator({ type, data, onClose }: DocumentGeneratorProps) {
+  const { success: toastSuccess, error: toastError } = useToast();
   const documentRef = useRef<HTMLDivElement>(null);
   const { settings: rawSettings } = useSettings();
   const settings = rawSettings || {
@@ -221,9 +223,9 @@ export default function DocumentGenerator({ type, data, onClose }: DocumentGener
       }
 
       setHasChanges(false);
-      alert('Changes saved successfully!');
+      toastSuccess('Changes saved successfully!');
     } catch (err: any) {
-      alert('Error saving changes: ' + err.message);
+      toastError('Error saving changes: ' + err.message);
     } finally {
       setIsSaving(false);
     }
@@ -238,9 +240,9 @@ export default function DocumentGenerator({ type, data, onClose }: DocumentGener
       .eq('id', client.id);
     
     if (error) {
-      alert('Error promoting client: ' + error.message);
+      toastError('Error promoting client: ' + error.message);
     } else {
-      alert('Client successfully added to database!');
+      toastSuccess('Client successfully added to database!');
       if (editableClient) {
         setEditableClient({ ...editableClient, tags: newTags });
       }

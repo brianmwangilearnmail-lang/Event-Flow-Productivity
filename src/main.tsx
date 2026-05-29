@@ -3,6 +3,7 @@ import {createRoot} from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
 import { SettingsProvider } from './context/SettingsContext';
+import { ToastProvider } from './context/ToastContext';
 import App from './App.tsx';
 import './index.css';
 
@@ -16,7 +17,9 @@ if (!root) {
         <BrowserRouter>
           <AuthProvider>
             <SettingsProvider>
-              <App />
+              <ToastProvider>
+                <App />
+              </ToastProvider>
             </SettingsProvider>
           </AuthProvider>
         </BrowserRouter>

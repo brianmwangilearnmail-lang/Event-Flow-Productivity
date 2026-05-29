@@ -8,6 +8,7 @@ import React, { useState, useEffect, Component, ReactNode } from 'react';
 // ─── Error Boundary ─────────────────────────────────────────────────────────
 interface EBState { hasError: boolean; error: Error | null; }
 class ErrorBoundary extends Component<{ children: ReactNode }, EBState> {
+  props: { children: ReactNode };
   state: EBState = { hasError: false, error: null };
   static getDerivedStateFromError(error: Error): EBState {
     return { hasError: true, error };

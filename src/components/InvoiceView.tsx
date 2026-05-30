@@ -17,8 +17,10 @@ import {
   MoreHorizontal,
   Eye,
   AlertCircle,
-  Pencil
+  Pencil,
+  Zap
 } from 'lucide-react';
+import QuickInvoiceModal from './QuickInvoiceModal';
 import { useSupabaseQuery } from '../hooks/useSupabaseQuery';
 import { supabase } from '../lib/supabase';
 import { logActivity } from '../db';
@@ -45,6 +47,7 @@ export default function InvoiceView({ onNavigate }: InvoiceViewProps) {
   const [clientSearchTerm, setClientSearchTerm] = useState('');
   const [invoiceToDelete, setInvoiceToDelete] = useState<Invoice | null>(null);
   const [deleteReason, setDeleteReason] = useState("");
+  const [isQuickInvoiceOpen, setIsQuickInvoiceOpen] = useState(false);
 
   const { settings } = useSettings();
 
@@ -156,14 +159,23 @@ export default function InvoiceView({ onNavigate }: InvoiceViewProps) {
             <p className="text-[10px] text-black/40 uppercase tracking-[0.2em] mt-1 font-bold">Financial records</p>
           </div>
         </div>
-        <button 
-          onClick={() => setIsCreateModalOpen(true)}
-          style={{ backgroundColor: settings?.brandColors?.primary || '#000000' }}
-          className="flex items-center justify-center gap-2 px-6 py-3 text-white hover:opacity-90 transition-all font-black text-[10px] uppercase tracking-[0.2em] rounded-xl shadow-xl shadow-black/10 mx-4 sm:mx-0"
-        >
-          <Plus size={16} />
-          New Invoice
-        </button>
+        <div className="flex items-center gap-3 mx-4 sm:mx-0">
+          <button 
+            onClick={() => setIsQuickInvoiceOpen(true)}
+            className="flex items-center justify-center gap-2 px-5 py-3 bg-black text-white rounded-xl font-black text-[10px] uppercase tracking-[0.2em] hover:bg-black/80 transition-all shadow-lg shadow-black/10"
+          >
+            <Zap size={14} className="text-yellow-400" />
+            Quick Invoice
+          </button>
+          <button 
+            onClick={() => setIsCreateModalOpen(true)}
+            style={{ backgroundColor: settings?.brandColors?.primary || '#000000' }}
+            className="flex items-center justify-center gap-2 px-6 py-3 text-white hover:opacity-90 transition-all font-black text-[10px] uppercase tracking-[0.2em] rounded-xl shadow-xl shadow-black/10"
+          >
+            <Plus size={16} />
+            New Invoice
+          </button>
+        </div>
       </div>
 
       <div className="bg-white border border-black/5 shadow-sm overflow-hidden flex flex-col rounded-2xl mx-4 md:mx-0">
@@ -558,6 +570,12 @@ export default function InvoiceView({ onNavigate }: InvoiceViewProps) {
           </div>
         </div>
       </Modal>
+
+      <QuickInvoiceModal
+        isOpen={isQuickInvoiceOpen}
+        onClose={() => setIsQuickInvoiceOpen(false)}
+        optimisticInsert={optimisticInsert}
+      />
     </div>
   );
 }

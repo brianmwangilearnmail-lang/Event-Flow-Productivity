@@ -155,7 +155,7 @@ export interface Quotation {
 export interface Invoice {
   id?: number;
   clientId: number;
-  eventId: number;
+  eventId?: number;
   quotationId?: number;
   number: string;
   type: 'Deposit' | 'Interim' | 'Final' | 'Full';

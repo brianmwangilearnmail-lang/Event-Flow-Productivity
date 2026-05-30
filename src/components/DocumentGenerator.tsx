@@ -733,23 +733,7 @@ export default function DocumentGenerator({ type, data, onClose }: DocumentGener
                     <span className="text-black/30">Subtotal</span>
                     <span className="text-black">{formatCurrency(totals.subtotal)}</span>
                   </div>
-                  <div className="flex justify-between text-[7px] sm:text-[9px] uppercase font-bold tracking-widest border-b border-black/5 pb-1.5 items-center">
-                    <span className="text-black/30">Rebate (%)</span>
-                    <input 
-                      type="number"
-                      value={editableData.globalDiscount || 0}
-                      onChange={(e) => {
-                        handleUpdate('data', 'globalDiscount', Number(e.target.value));
-                      }}
-                      className="w-12 text-right bg-transparent border-none outline-none font-bold p-0 focus:ring-1 focus:ring-black/5 rounded"
-                    />
-                  </div>
-                  {totals.discountAmount > 0 && (
-                    <div className="flex justify-between text-[7px] sm:text-[9px] uppercase font-bold tracking-widest border-b border-black/5 pb-1.5 items-center text-red-500">
-                      <span>Discount Amt</span>
-                      <span>-{formatCurrency(totals.discountAmount)}</span>
-                    </div>
-                  )}
+
                   <div className="flex justify-between text-[7px] sm:text-[9px] uppercase font-bold tracking-widest border-b border-black/5 pb-1.5 items-center">
                     <span className="text-black/30">Tax ({totals.taxRate}%)</span>
                     <span className="text-black">{formatCurrency(totals.taxTotal)}</span>

@@ -145,12 +145,12 @@ export default function QuotationBuilder({ isOpen, onClose, initialQuotation, op
   }, [isOpen, initialQuotation, settings, clients]);
 
   const totals = useMemo(() => {
-    const itemsSubtotal = lineItems.reduce((sum, item) => sum + (item.quantity * item.unitPrice * (1 - item.discount/100)), 0);
+    const itemsSubtotal = lineItems.reduce((sum, item) => sum + (item.quantity * item.unitPrice), 0);
     const transportCost = transportPrice;
     const subtotal = itemsSubtotal + transportCost + laborCost;
     
-    const discountAmount = subtotal * (globalDiscount / 100);
-    const subtotalAfterDiscount = subtotal - discountAmount;
+    const discountAmount = 0;
+    const subtotalAfterDiscount = subtotal;
     const taxTotal = subtotalAfterDiscount * (taxRate / 100);
     const grandTotal = subtotalAfterDiscount + taxTotal;
     
@@ -161,7 +161,7 @@ export default function QuotationBuilder({ isOpen, onClose, initialQuotation, op
       grandTotal,
       balanceAfterDeposit: grandTotal - depositRequired
     };
-  }, [lineItems, transportPrice, laborCost, globalDiscount, taxRate, depositRequired]);
+  }, [lineItems, transportPrice, laborCost, taxRate, depositRequired]);
 
   const handleAddLineItem = (item: CatalogItem) => {
     const newLineItem: QuotationLineItem = {
@@ -609,7 +609,7 @@ export default function QuotationBuilder({ isOpen, onClose, initialQuotation, op
                         </button>
                       </div>
                       
-                      <div className="grid grid-cols-3 gap-2">
+                       <div className="grid grid-cols-2 gap-2">
                         <div className="space-y-1">
                           <label className="text-[7px] uppercase font-black text-gray-300 tracking-tighter">Qty</label>
                           <input 
@@ -628,20 +628,11 @@ export default function QuotationBuilder({ isOpen, onClose, initialQuotation, op
                             className="w-full bg-gray-50 rounded-lg p-1.5 text-[10px] font-bold text-center outline-none"
                           />
                         </div>
-                        <div className="space-y-1">
-                          <label className="text-[7px] uppercase font-black text-gray-300 tracking-tighter">Disc%</label>
-                          <input 
-                            type="number"
-                            value={item.discount} 
-                            onChange={(e) => updateLineItem(i, 'discount', Number(e.target.value))}
-                            className="w-full bg-gray-50 rounded-lg p-1.5 text-[10px] font-bold text-center outline-none"
-                          />
-                        </div>
                       </div>
                       <div className="flex justify-between items-center bg-bg-base/50 p-2 rounded-lg">
                         <span className="text-[8px] font-black uppercase text-gray-400">Item Total</span>
                         <span className="text-xs font-black text-black">
-                          {formatCurrency(item.quantity * item.unitPrice * (1 - item.discount/100))}
+                          {formatCurrency(item.quantity * item.unitPrice)}
                         </span>
                       </div>
                     </div>
@@ -661,7 +652,6 @@ export default function QuotationBuilder({ isOpen, onClose, initialQuotation, op
                       <th className="px-8 py-4 text-[9px] uppercase tracking-[0.3em] font-bold text-black/40 border-b border-black/5">Item Detail</th>
                       <th className="px-2 py-4 text-[9px] uppercase tracking-[0.3em] font-bold text-black/40 border-b border-black/5 w-24 text-center">Qty</th>
                       <th className="px-2 py-4 text-[9px] uppercase tracking-[0.3em] font-bold text-black/40 border-b border-black/5 w-32 text-right">Rate</th>
-                      <th className="px-2 py-4 text-[9px] uppercase tracking-[0.3em] font-bold text-black/40 border-b border-black/5 w-24 text-center">Disc%</th>
                       <th className="px-8 py-4 text-[9px] uppercase tracking-[0.3em] font-bold text-black/40 border-b border-black/5 text-right w-36">Total</th>
                       <th className="px-8 py-4 text-[9px] uppercase tracking-[0.3em] font-bold text-black/40 border-b border-black/5 w-16"></th>
                     </tr>
@@ -709,16 +699,8 @@ export default function QuotationBuilder({ isOpen, onClose, initialQuotation, op
                             className="text-xs font-bold bg-bg-base/50 border border-black/5 p-2 outline-none w-full text-right text-black"
                           />
                         </td>
-                        <td className="px-2 py-6">
-                          <input 
-                            type="number"
-                            value={item.discount} 
-                            onChange={(e) => updateLineItem(i, 'discount', Number(e.target.value))}
-                            className="text-xs font-bold bg-bg-base/50 border border-black/5 p-2 outline-none w-full text-center text-black"
-                          />
-                        </td>
                         <td className="px-8 py-6 text-right font-serif text-lg tracking-tight text-black">
-                          {formatCurrency(item.quantity * item.unitPrice * (1 - item.discount/100))}
+                          {formatCurrency(item.quantity * item.unitPrice)}
                         </td>
                         <td className="px-8 py-6 text-right">
                           <button 
@@ -755,23 +737,7 @@ export default function QuotationBuilder({ isOpen, onClose, initialQuotation, op
                   <span className="text-black">{formatCurrency(totals.subtotal)}</span>
                 </div>
                 
-                <div className="pb-3 border-b border-black/5 space-y-1.5">
-                  <div className="flex justify-between items-center text-[9px] font-bold text-gray-400 uppercase tracking-widest">
-                    <span>Rebate (%)</span>
-                    <input 
-                      type="number"
-                      value={globalDiscount}
-                      onChange={(e) => setGlobalDiscount(Number(e.target.value))}
-                      className="w-10 bg-gray-50 border-none px-1.5 py-1 text-right text-[10px] font-black outline-none rounded-md"
-                    />
-                  </div>
-                  {totals.discountAmount > 0 && (
-                     <div className="flex justify-between items-center text-[8px] text-red-500 font-bold uppercase tracking-widest">
-                      <span>Adjustment</span>
-                      <span>-{formatCurrency(totals.discountAmount)}</span>
-                    </div>
-                  )}
-                </div>
+
 
                 <div className="flex justify-between items-center text-[9px] font-bold text-gray-400 uppercase tracking-widest">
                   <span>Tax ({taxRate}%)</span>

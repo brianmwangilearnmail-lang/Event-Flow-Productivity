@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { 
   Plus, 
   Search, 
@@ -22,7 +22,10 @@ import {
   Calendar,
   MoreHorizontal,
   Pencil,
-  Users
+  Users,
+  ChevronDown,
+  FileCheck,
+  FileClock
 } from 'lucide-react';
 import { useSupabaseQuery } from '../hooks/useSupabaseQuery';
 import { supabase } from '../lib/supabase';
@@ -48,9 +51,28 @@ export default function QuotationView({ onNavigate }: QuotationViewProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedQuote, setSelectedQuote] = useState<Quotation | null>(null);
   const [statusFilter, setStatusFilter] = useState<DocumentStatus | 'All'>('All');
+  const [activeTab, setActiveTab] = useState<'drafts' | 'approved'>('drafts');
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
 
   const { settings } = useSettings();
   const { success: toastSuccess, error: toastError } = useToast();
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setIsDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const DRAFT_STATUSES: DocumentStatus[] = [DocumentStatus.DRAFT, DocumentStatus.CREATED, DocumentStatus.SENT, DocumentStatus.RECEIVED];
+  const APPROVED_STATUSES: DocumentStatus[] = [DocumentStatus.APPROVED, DocumentStatus.DECLINED];
+
+  const tabStatusOptions = activeTab === 'drafts' ? DRAFT_STATUSES : APPROVED_STATUSES;
 
   const { data: quotations = [], optimisticInsert, optimisticUpdate, optimisticDelete } = useSupabaseQuery<any>('quotations', (q) => {
     let query = q.select('*, clients(*), events(title)').order('id', { ascending: false });
@@ -58,6 +80,7 @@ export default function QuotationView({ onNavigate }: QuotationViewProps) {
   }, []);
 
   const filteredQuotations = React.useMemo(() => {
+    const tabStatuses = activeTab === 'drafts' ? DRAFT_STATUSES : APPROVED_STATUSES;
     return quotations.map(q => {
       const validUntil = new Date(q.validUntil);
       const today = new Date();
@@ -77,12 +100,13 @@ export default function QuotationView({ onNavigate }: QuotationViewProps) {
         (q.number?.toLowerCase() || '').includes(search) ||
         (q.clientName?.toLowerCase() || '').includes(search) ||
         (q.eventName?.toLowerCase() || '').includes(search);
-      
+
+      const matchesTab = tabStatuses.includes(q.status as DocumentStatus);
       const matchesStatus = statusFilter === 'All' || q.status === statusFilter;
       
-      return matchesSearch && matchesStatus;
+      return matchesSearch && matchesTab && matchesStatus;
     });
-  }, [quotations, searchTerm, statusFilter]);
+  }, [quotations, searchTerm, statusFilter, activeTab]);
 
   const handleStatusChange = async (id: number, status: DocumentStatus) => {
     // Instant UI update
@@ -151,6 +175,11 @@ export default function QuotationView({ onNavigate }: QuotationViewProps) {
     }
   };
 
+  const draftCount = quotations.filter(q => DRAFT_STATUSES.includes(q.status as DocumentStatus)).length;
+  const approvedCount = quotations.filter(q => APPROVED_STATUSES.includes(q.status as DocumentStatus)).length;
+
+  const statusLabel = statusFilter === 'All' ? 'All Status' : statusFilter;
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -187,6 +216,48 @@ export default function QuotationView({ onNavigate }: QuotationViewProps) {
         </div>
       </div>
 
+      {/* ── Tabs ────────────────────────────────────────────── */}
+      <div className="flex items-center gap-1 bg-white border border-gray-100 rounded-xl p-1 w-fit shadow-sm">
+        <button
+          onClick={() => { setActiveTab('drafts'); setStatusFilter('All'); }}
+          className={cn(
+            "flex items-center gap-2 px-4 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all",
+            activeTab === 'drafts'
+              ? "text-white shadow-sm"
+              : "text-black/40 hover:text-black"
+          )}
+          style={activeTab === 'drafts' ? { backgroundColor: settings?.brandColors?.primary || '#000000' } : {}}
+        >
+          <FileClock size={12} />
+          Draft Quotes
+          <span className={cn(
+            "ml-1 px-1.5 py-0.5 rounded-full text-[8px] font-black",
+            activeTab === 'drafts' ? "bg-white/20 text-white" : "bg-gray-100 text-gray-400"
+          )}>
+            {draftCount}
+          </span>
+        </button>
+        <button
+          onClick={() => { setActiveTab('approved'); setStatusFilter('All'); }}
+          className={cn(
+            "flex items-center gap-2 px-4 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all",
+            activeTab === 'approved'
+              ? "text-white shadow-sm"
+              : "text-black/40 hover:text-black"
+          )}
+          style={activeTab === 'approved' ? { backgroundColor: settings?.brandColors?.secondary || '#D4AF37' } : {}}
+        >
+          <FileCheck size={12} />
+          Approved / Confirmed
+          <span className={cn(
+            "ml-1 px-1.5 py-0.5 rounded-full text-[8px] font-black",
+            activeTab === 'approved' ? "bg-white/20 text-white" : "bg-gray-100 text-gray-400"
+          )}>
+            {approvedCount}
+          </span>
+        </button>
+      </div>
+
       <div className="bg-white rounded-xl md:rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
         <div className="p-3 border-b border-gray-50 flex flex-col sm:flex-row gap-3">
           <div className="relative flex-1">
@@ -199,23 +270,59 @@ export default function QuotationView({ onNavigate }: QuotationViewProps) {
               className="w-full pl-11 pr-4 py-2.5 bg-gray-50 border-none rounded-xl text-xs outline-none font-bold"
             />
           </div>
-          <div className="relative min-w-[140px]">
-            <Filter className="absolute left-3 top-1/2 -translate-y-1/2 text-gold-deep" size={14} />
-            <select
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value as any)}
-              className="w-full pl-9 pr-8 py-2.5 bg-gray-50 border-none rounded-xl text-[10px] font-black uppercase tracking-widest outline-none appearance-none cursor-pointer"
+
+          {/* Compact dropdown filter */}
+          <div className="relative" ref={dropdownRef}>
+            <button
+              onClick={() => setIsDropdownOpen(prev => !prev)}
+              className="flex items-center gap-2 px-3 py-2.5 bg-gray-50 hover:bg-gray-100 rounded-xl transition-all cursor-pointer"
             >
-              <option value="All">All Status</option>
-              {Object.values(DocumentStatus).filter(s => 
-                [DocumentStatus.DRAFT, DocumentStatus.CREATED, DocumentStatus.SENT, DocumentStatus.RECEIVED, DocumentStatus.APPROVED, DocumentStatus.DECLINED].includes(s)
-              ).map(status => (
-                <option key={status} value={status}>{status}</option>
-              ))}
-            </select>
-            <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400">
-              <MoreHorizontal size={14} />
-            </div>
+              <Filter size={13} style={{ color: settings?.brandColors?.secondary || '#D4AF37' }} />
+              <span className="text-[10px] font-black uppercase tracking-widest text-black/70 whitespace-nowrap">
+                {statusLabel}
+              </span>
+              <ChevronDown
+                size={12}
+                className={cn("text-gray-400 transition-transform", isDropdownOpen && "rotate-180")}
+              />
+            </button>
+
+            {isDropdownOpen && (
+              <div className="absolute right-0 top-[calc(100%+6px)] z-50 min-w-[160px] bg-white border border-gray-100 rounded-xl shadow-xl overflow-hidden animate-in fade-in slide-in-from-top-1 duration-150">
+                <div className="p-1">
+                  <button
+                    onClick={() => { setStatusFilter('All'); setIsDropdownOpen(false); }}
+                    className={cn(
+                      "w-full text-left px-3 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all",
+                      statusFilter === 'All' ? "bg-black text-white" : "text-black/60 hover:bg-gray-50"
+                    )}
+                  >
+                    All Status
+                  </button>
+                  {tabStatusOptions.map(status => (
+                    <button
+                      key={status}
+                      onClick={() => { setStatusFilter(status); setIsDropdownOpen(false); }}
+                      className={cn(
+                        "w-full text-left px-3 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2",
+                        statusFilter === status ? "bg-black text-white" : "text-black/60 hover:bg-gray-50"
+                      )}
+                    >
+                      <span className={cn(
+                        "w-1.5 h-1.5 rounded-full shrink-0",
+                        status === DocumentStatus.APPROVED ? "bg-green-500" :
+                        status === DocumentStatus.RECEIVED ? "bg-green-400" :
+                        status === DocumentStatus.SENT ? "bg-blue-500" :
+                        status === DocumentStatus.CREATED ? "bg-purple-500" :
+                        status === DocumentStatus.DRAFT ? "bg-gray-400" :
+                        "bg-red-500"
+                      )} />
+                      {status}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         </div>
 

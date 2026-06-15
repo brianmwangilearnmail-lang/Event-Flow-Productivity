@@ -258,7 +258,7 @@ export default function QuotationView({ onNavigate }: QuotationViewProps) {
         </button>
       </div>
 
-      <div className="bg-white rounded-xl md:rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+      <div className="bg-white rounded-xl md:rounded-2xl border border-gray-100 shadow-sm">
         <div className="p-3 border-b border-gray-50 flex flex-col sm:flex-row gap-3">
           <div className="relative flex-1">
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-300" size={16} />
@@ -288,7 +288,7 @@ export default function QuotationView({ onNavigate }: QuotationViewProps) {
             </button>
 
             {isDropdownOpen && (
-              <div className="absolute right-0 top-[calc(100%+6px)] z-50 min-w-[160px] bg-white border border-gray-100 rounded-xl shadow-xl overflow-hidden animate-in fade-in slide-in-from-top-1 duration-150">
+              <div className="absolute right-0 top-[calc(100%+6px)] z-50 min-w-[160px] max-h-64 overflow-y-auto bg-white border border-gray-100 rounded-xl shadow-xl animate-in fade-in slide-in-from-top-1 duration-150 custom-scrollbar">
                 <div className="p-1">
                   <button
                     onClick={() => { setStatusFilter('All'); setIsDropdownOpen(false); }}

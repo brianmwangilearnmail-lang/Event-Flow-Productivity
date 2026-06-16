@@ -1,6 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { 
-  Plus, 
   Search, 
   FileText, 
   Download, 
@@ -206,14 +205,6 @@ export default function QuotationView({ onNavigate }: QuotationViewProps) {
           >
             <Zap size={14} className="text-yellow-400" />
             Quick Quotation
-          </button>
-          <button 
-            onClick={() => { setIsQuickMode(false); setIsBuilderOpen(true); }}
-            style={{ backgroundColor: settings?.brandColors?.primary || '#000000' }}
-            className="flex items-center justify-center gap-2 px-6 py-3 text-white rounded-xl font-bold text-xs hover:opacity-90 transition-all shadow-lg shadow-black/10"
-          >
-            <Plus size={16} />
-            New Quotation
           </button>
         </div>
       </div>

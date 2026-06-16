@@ -51,7 +51,7 @@ export default function QuotationView({ onNavigate }: QuotationViewProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedQuote, setSelectedQuote] = useState<Quotation | null>(null);
   const [statusFilter, setStatusFilter] = useState<DocumentStatus | 'All'>('All');
-  const [activeTab, setActiveTab] = useState<'drafts' | 'approved'>('drafts');
+  const [activeTab, setActiveTab] = useState<'drafts' | 'approved' | 'declined'>('drafts');
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
@@ -70,9 +70,10 @@ export default function QuotationView({ onNavigate }: QuotationViewProps) {
   }, []);
 
   const DRAFT_STATUSES: DocumentStatus[] = [DocumentStatus.DRAFT, DocumentStatus.CREATED, DocumentStatus.SENT, DocumentStatus.RECEIVED];
-  const APPROVED_STATUSES: DocumentStatus[] = [DocumentStatus.APPROVED, DocumentStatus.DECLINED];
+  const APPROVED_STATUSES: DocumentStatus[] = [DocumentStatus.APPROVED];
+  const DECLINED_STATUSES: DocumentStatus[] = [DocumentStatus.DECLINED];
 
-  const tabStatusOptions = activeTab === 'drafts' ? DRAFT_STATUSES : APPROVED_STATUSES;
+  const tabStatusOptions = activeTab === 'drafts' ? DRAFT_STATUSES : activeTab === 'approved' ? APPROVED_STATUSES : DECLINED_STATUSES;
 
   const { data: quotations = [], optimisticInsert, optimisticUpdate, optimisticDelete } = useSupabaseQuery<any>('quotations', (q) => {
     let query = q.select('*, clients(*), events(title)').order('id', { ascending: false });
@@ -80,7 +81,7 @@ export default function QuotationView({ onNavigate }: QuotationViewProps) {
   }, []);
 
   const filteredQuotations = React.useMemo(() => {
-    const tabStatuses = activeTab === 'drafts' ? DRAFT_STATUSES : APPROVED_STATUSES;
+    const tabStatuses = activeTab === 'drafts' ? DRAFT_STATUSES : activeTab === 'approved' ? APPROVED_STATUSES : DECLINED_STATUSES;
     return quotations.map(q => {
       const validUntil = new Date(q.validUntil);
       const today = new Date();
@@ -177,6 +178,7 @@ export default function QuotationView({ onNavigate }: QuotationViewProps) {
 
   const draftCount = quotations.filter(q => DRAFT_STATUSES.includes(q.status as DocumentStatus)).length;
   const approvedCount = quotations.filter(q => APPROVED_STATUSES.includes(q.status as DocumentStatus)).length;
+  const declinedCount = quotations.filter(q => DECLINED_STATUSES.includes(q.status as DocumentStatus)).length;
 
   const statusLabel = statusFilter === 'All' ? 'All Status' : statusFilter;
 
@@ -254,6 +256,25 @@ export default function QuotationView({ onNavigate }: QuotationViewProps) {
             activeTab === 'approved' ? "bg-white/20 text-white" : "bg-gray-100 text-gray-400"
           )}>
             {approvedCount}
+          </span>
+        </button>
+        <button
+          onClick={() => { setActiveTab('declined'); setStatusFilter('All'); }}
+          className={cn(
+            "flex items-center gap-2 px-4 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all",
+            activeTab === 'declined'
+              ? "text-white shadow-sm"
+              : "text-black/40 hover:text-black"
+          )}
+          style={activeTab === 'declined' ? { backgroundColor: '#ef4444' } : {}}
+        >
+          <XCircle size={12} />
+          Declined
+          <span className={cn(
+            "ml-1 px-1.5 py-0.5 rounded-full text-[8px] font-black",
+            activeTab === 'declined' ? "bg-white/20 text-white" : "bg-gray-100 text-gray-400"
+          )}>
+            {declinedCount}
           </span>
         </button>
       </div>

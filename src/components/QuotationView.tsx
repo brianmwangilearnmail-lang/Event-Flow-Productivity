@@ -340,7 +340,7 @@ export default function QuotationView({ onNavigate }: QuotationViewProps) {
 
         {/* Desktop Table View */}
         <div className="hidden md:block overflow-x-auto">
-          <table className="w-full text-left">
+          <table className="w-full text-left min-w-max">
             <thead>
               <tr className="bg-gray-50/50">
                 <th className="px-6 py-4 text-[10px] uppercase tracking-widest font-bold text-gray-400">Quote Reference</th>

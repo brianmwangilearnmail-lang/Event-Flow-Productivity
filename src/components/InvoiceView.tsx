@@ -215,7 +215,7 @@ export default function InvoiceView({ onNavigate }: InvoiceViewProps) {
         </div>
 
         <div className="hidden md:block flex-1 overflow-x-auto">
-          <table className="w-full text-left border-collapse min-w-[700px]">
+          <table className="w-full text-left border-collapse min-w-max">
             <thead>
               <tr className="bg-bg-base/30">
                 <th className="px-8 py-4 text-[9px] uppercase tracking-[0.3em] font-black text-black/40 border-b border-black/5">Invoice Meta</th>

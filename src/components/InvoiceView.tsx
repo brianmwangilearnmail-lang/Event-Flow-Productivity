@@ -283,7 +283,7 @@ export default function InvoiceView({ onNavigate }: InvoiceViewProps) {
                         <option value={DocumentStatus.UNPAID} className="bg-white text-black font-medium">Unpaid</option>
                         <option value={DocumentStatus.PENDING_PAYMENT} className="bg-white text-black font-medium">Pending Payment</option>
                         {inv.status === DocumentStatus.PAID && (
-                          <option value={DocumentStatus.PAID} className="bg-white text-black font-medium" disabled>Paid</option>
+                          <option value={DocumentStatus.PAID} className="bg-white text-black font-medium" disabled>Settled</option>
                         )}
                       </select>
                       {inv.status !== DocumentStatus.PAID && (
@@ -401,7 +401,7 @@ export default function InvoiceView({ onNavigate }: InvoiceViewProps) {
                     <option value={DocumentStatus.UNPAID} className="bg-white text-black font-medium">Unpaid</option>
                     <option value={DocumentStatus.PENDING_PAYMENT} className="bg-white text-black font-medium">Pending Payment</option>
                     {inv.status === DocumentStatus.PAID && (
-                      <option value={DocumentStatus.PAID} className="bg-white text-black font-medium" disabled>Paid</option>
+                      <option value={DocumentStatus.PAID} className="bg-white text-black font-medium" disabled>Settled</option>
                     )}
                   </select>
                   {inv.status !== DocumentStatus.PAID && (

@@ -5,6 +5,7 @@ import { logActivity } from '../db';
 import { Invoice, DocumentStatus } from '../types';
 import { formatCurrency } from '../lib/utils';
 import { DollarSign, Save } from 'lucide-react';
+import { useToast } from '../context/ToastContext';
 
 interface ReceiptFormProps {
   invoice: Invoice;
@@ -14,6 +15,7 @@ interface ReceiptFormProps {
 
 export default function ReceiptForm({ invoice, onSuccess, optimisticUpdate }: ReceiptFormProps) {
   const balance = invoice.grandTotal - (invoice.amountPaid || 0);
+  const { success: toastSuccess } = useToast();
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -38,6 +40,13 @@ export default function ReceiptForm({ invoice, onSuccess, optimisticUpdate }: Re
         status: newStatus
       });
     }
+    
+    if (newStatus === DocumentStatus.PAID) {
+      toastSuccess('Payment has been settled');
+    } else {
+      toastSuccess('Payment recorded successfully');
+    }
+    
     onSuccess();
 
     // 1. Create Payment
